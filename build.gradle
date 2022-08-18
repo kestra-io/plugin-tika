@@ -106,7 +106,7 @@ jar {
     manifest {
         attributes(
                 "X-Kestra-Title": project.name,
-                "X-Kestra-Group": project.group + ".templates",
+                "X-Kestra-Group": project.group + ".tika",
                 "X-Kestra-Description": project.description,
                 "X-Kestra-Version": project.version
         )
