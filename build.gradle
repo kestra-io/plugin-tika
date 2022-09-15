@@ -46,7 +46,7 @@ dependencies {
     compileOnly group: "io.kestra", name: "core", version: kestraVersion
 
     // tika plugins
-    compileOnly group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.11'
+    compileOnly group: 'ch.qos.logback', name: 'logback-classic', version: '1.4.1'
     api group: 'org.apache.tika', name: 'tika-core', version: '2.4.1'
     api group: 'org.apache.tika', name: 'tika-parsers-standard-package', version: '2.4.1'
 }
