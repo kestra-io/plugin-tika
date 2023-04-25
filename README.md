@@ -4,7 +4,7 @@
   <img width="460" src="https://kestra.io/logo.svg"  alt="Kestra workflow orchestrator" />
 </p>
 
-> Plugin to interact with [spark](https://spark.apache.org/)
+> Plugin to interact with [tika](https://tika.apache.org/)
 
 ![Kestra orchestrator](https://kestra.io/ui.gif)
 
