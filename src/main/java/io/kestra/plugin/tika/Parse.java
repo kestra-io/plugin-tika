@@ -28,10 +28,12 @@ import org.apache.tika.sax.ToXMLContentHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.ContentHandler;
-import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.io.*;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -130,9 +132,9 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     public Parse.Output run(RunContext runContext) throws Exception {
         Logger logger = runContext.logger();
 
-        TikaConfig config = TikaConfig.getDefaultConfig();
+        TikaConfig config = new TikaConfig(this.getClass().getClassLoader());
 
-        AutoDetectParser parser = new AutoDetectParser();
+        AutoDetectParser parser = new AutoDetectParser(config);
         Metadata metadata = new Metadata();
         EmbeddedDocumentExtractor embeddedDocumentExtractor = new EmbeddedDocumentExtractor(
             config,
@@ -199,7 +201,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                 .build();
 
             if (this.store) {
-                Path tempFile = runContext.tempFile();
+                Path tempFile = runContext.tempFile(".ion");
                 try (
                     OutputStream output = new FileOutputStream(tempFile.toFile());
                 ) {
@@ -245,13 +247,14 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             return this.parseEmbedded;
         }
         @Override
-        public void parseEmbedded(InputStream stream, ContentHandler handler, Metadata metadata, boolean outputHtml) throws SAXException, IOException {
+        public void parseEmbedded(InputStream stream, ContentHandler handler, Metadata metadata, boolean outputHtml) throws IOException {
             String name = this.fileName(stream, metadata);
+            String extension = FilenameUtils.getExtension(name);
 
             logger.debug("Extracting file {}", name);
 
             // Upload
-            Path path = runContext.tempFile();
+            Path path = runContext.tempFile("." + extension);
             //noinspection ResultOfMethodCallIgnored
             path.toFile().delete();
 
