@@ -46,6 +46,7 @@ class ParseTest {
         URL resource = ParseTest.class.getClassLoader().getResource(doc);
 
         URI storage = storageInterface.put(
+            null,
             new URI("/" + IdUtils.create()),
             new FileInputStream(Objects.requireNonNull(resource).getFile())
         );
