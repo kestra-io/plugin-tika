@@ -49,12 +49,12 @@ import java.util.stream.Collectors;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Parse a document and extract content and metadata"
+    title = "Parse a document and extract its content and metadata."
 )
 @Plugin(
     examples = {
         @Example(
-            title = "Extract a text & embedded image from a file ",
+            title = "Extract text from a file.",
             code = {
                 "from: '{{ inputs.file }}'",
                 "extractEmbedded: true",
@@ -62,7 +62,7 @@ import java.util.stream.Collectors;
             }
         ),
         @Example(
-            title = "Extract a text using ocr from an image",
+            title = "Extract text from an image using OCR.",
             code = {
                 "from: '{{ inputs.file }}'",
                 "ocrOptions:",
@@ -74,31 +74,30 @@ import java.util.stream.Collectors;
 )
 public class Parse extends Task implements RunnableTask<Parse.Output> {
     @Schema(
-        title = "The file to parse",
-        description = "Must be a kestra internal storage"
+        title = "The file to parse.",
+        description = "Must be an internal storage URI."
     )
     @PluginProperty(dynamic = true)
     private String from;
 
     @Schema(
-        title = "The file to parse",
-        description = "Must be a kestra internal storage"
+        title = "Whether to extract the embedded document."
     )
     @PluginProperty(dynamic = false)
     @Builder.Default
     private Boolean extractEmbedded = false;
 
     @Schema(
-        title = "The content type of extracted text"
+        title = "The content type of the extracted text."
     )
     @PluginProperty(dynamic = false)
     @Builder.Default
     private ContentType contentType = ContentType.XHTML;
 
     @Schema(
-        title = "Enable or Disable OCR capture",
+        title = "Custom options for OCR processing.",
         description = "You need to install [Tesseract](https://cwiki.apache.org/confluence/display/TIKA/TikaOCR) " +
-            "to enable OCR processing"
+            "to enable OCR processing."
     )
     @PluginProperty(dynamic = false)
     @Builder.Default
@@ -107,7 +106,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         .build();
 
     @Schema(
-        title = "Whether to store the data from the query result into an ion serialized data file"
+        title = "Whether to store the data from the query result into an ion serialized data file in Kestra internal storage."
     )
     @PluginProperty(dynamic = false)
     @Builder.Default
@@ -287,7 +286,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                 try {
                     name += config.getMimeRepository().forName(contentType.toString()).getExtension();
                 } catch (MimeTypeException e) {
-                    logger.debug("Unable to detect minetype on {}", name);
+                    logger.debug("Unable to detect MIME type on {}", name);
                 }
             }
 
@@ -319,25 +318,25 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     public static class OcrOptions {
 
         @Schema(
-            title = "Enable or Disable OCR capture",
+            title = "OCR strategy to use for OCR processing.",
             description = "You need to install [Tesseract](https://cwiki.apache.org/confluence/display/TIKA/TikaOCR) " +
-                "to enable OCR processing, plus Tesseract language pack"
+                "to enable OCR processing, along with Tesseract language pack."
         )
         @PluginProperty(dynamic = false)
         @Builder.Default
         private PDFParserConfig.OCR_STRATEGY strategy = PDFParserConfig.OCR_STRATEGY.NO_OCR;
 
         @Schema(
-            title = "Enable image preprocessing",
-            description = "Tika will run preprocessing of images (rotation detection and image normalizing with ImageMagick) " +
-                "before sending the image to tesseract if the user has included dependencies (listed below) " +
+            title = "Whether to enable image preprocessing.",
+            description = "Apache Tika will run preprocessing of images (rotation detection and image normalizing with ImageMagick) " +
+                "before sending the image to Tesseract if the user has included dependencies (listed below) " +
                 "and if the user opts to include these preprocessing steps."
         )
         @PluginProperty(dynamic = false)
         private Boolean enableImagePreprocessing;
 
         @Schema(
-            title = "Language used for OCR"
+            title = "Language used for OCR."
         )
         @PluginProperty(dynamic = true)
         private String language;
