@@ -51,7 +51,7 @@ dependencies {
 
     // tika plugins
     compileOnly group: 'ch.qos.logback', name: 'logback-classic'
-    api (group: 'org.apache.tika', name: 'tika-core', version: '2.9.1') {
+    api (group: 'org.apache.tika', name: 'tika-core', version: '2.9.2') {
         exclude group: 'org.slf4j'
     }
     api (group: 'org.apache.tika', name: 'tika-parsers-standard-package', version: '2.9.1') {
