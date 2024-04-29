@@ -43,7 +43,7 @@ dependencies {
 
     // Logs
     compileOnly'org.slf4j:slf4j-api:2.0.13'
-    compileOnly 'ch.qos.logback:logback-classic:1.5.5'
+    compileOnly 'ch.qos.logback:logback-classic:1.5.6'
 
     // tika plugins
     api (group: 'org.apache.tika', name: 'tika-core', version: '2.9.2') {
