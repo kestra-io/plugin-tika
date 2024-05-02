@@ -3,7 +3,7 @@ plugins {
     id "idea"
     id "com.adarshr.test-logger" version "4.0.0"
     id "com.github.johnrengelman.shadow" version "8.1.1"
-    id 'ru.vyarus.java-lib' version '2.4.0'
+    id 'ru.vyarus.java-lib' version '3.0.0'
     id 'ru.vyarus.github-info' version '2.0.0'
     id 'signing'
     id "io.github.gradle-nexus.publish-plugin" version "2.0.0"
@@ -42,8 +42,8 @@ dependencies {
     compileOnly group: "io.kestra", name: "core", version: kestraVersion
 
     // Logs
-    compileOnly'org.slf4j:slf4j-api:2.0.13'
-    compileOnly 'ch.qos.logback:logback-classic:1.5.5'
+    compileOnly 'org.slf4j:slf4j-api:2.0.13'
+    compileOnly 'ch.qos.logback:logback-classic:1.5.6'
 
     // tika plugins
     api (group: 'org.apache.tika', name: 'tika-core', version: '2.9.2') {
@@ -125,11 +125,11 @@ jar {
     }
 }
 
-pom {
+maven.pom {
     developers {
         developer {
-            id "tchiotludo"
-            name "Ludovic Dehon"
+            id = "tchiotludo"
+            name = "Ludovic Dehon"
         }
     }
 }
