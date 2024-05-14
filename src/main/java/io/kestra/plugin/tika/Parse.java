@@ -182,7 +182,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         // Process
         URI from = new URI(runContext.render(this.from));
 
-        try (InputStream stream = runContext.uriToInputStream(from)) {
+        try (InputStream stream = runContext.storage().getFile(from)) {
             parser.parse(stream, handler, metadata, context);
 
             String content = handler.toString();
@@ -208,7 +208,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                 }
 
                 return Output.builder()
-                    .uri(runContext.putTempFile(tempFile.toFile()))
+                    .uri(runContext.storage().putFile(tempFile.toFile()))
                     .build();
             } else {
                 return Output.builder()
@@ -258,7 +258,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             path.toFile().delete();
 
             Files.copy(stream, path);
-            URI uri = runContext.putTempFile(path.toFile());
+            URI uri = runContext.storage().putFile(path.toFile());
 
             extracted.put(name, uri);
         }
