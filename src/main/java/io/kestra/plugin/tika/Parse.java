@@ -200,7 +200,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                 .build();
 
             if (this.store) {
-                Path tempFile = runContext.tempFile(".ion");
+                Path tempFile = runContext.workingDir().createTempFile(".ion");
                 try (
                     OutputStream output = new FileOutputStream(tempFile.toFile());
                 ) {
@@ -253,7 +253,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             logger.debug("Extracting file {}", name);
 
             // Upload
-            Path path = runContext.tempFile("." + extension);
+            Path path = runContext.workingDir().createTempFile("." + extension);
             //noinspection ResultOfMethodCallIgnored
             path.toFile().delete();
 
