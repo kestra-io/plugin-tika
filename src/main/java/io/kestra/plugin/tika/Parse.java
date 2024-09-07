@@ -55,20 +55,42 @@ import java.util.stream.Collectors;
     examples = {
         @Example(
             title = "Extract text from a file.",
-            code = {
-                "from: '{{ inputs.file }}'",
-                "extractEmbedded: true",
-                "store: false"
-            }
+            full = true,
+            code = """
+                id: tika_parse
+                namespace: company.team
+
+                inputs:
+                  - id: file
+                    type: FILE
+
+                tasks:
+                  - id: parse
+                    type: io.kestra.plugin.tika.Parse
+                    from: '{{ inputs.file }}'
+                    extractEmbedded: true
+                    store: false
+                """
         ),
         @Example(
             title = "Extract text from an image using OCR.",
-            code = {
-                "from: '{{ inputs.file }}'",
-                "ocrOptions:",
-                "  strategy: OCR_AND_TEXT_EXTRACTION",
-                "store: true"
-            }
+            full = true,
+            code = """
+                id: tika_parse
+                namespace: company.team
+
+                inputs:
+                  - id: file
+                    type: FILE
+
+                tasks:
+                  - id: parse
+                    type: io.kestra.plugin.tika.Parse
+                    from: '{{ inputs.file }}'
+                    ocrOptions:
+                      strategy: OCR_AND_TEXT_EXTRACTION
+                    store: true
+                """
         )
     }
 )
