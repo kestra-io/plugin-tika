@@ -47,6 +47,7 @@ class ParseTest {
 
         URI storage = storageInterface.put(
             null,
+            null,
             new URI("/" + IdUtils.create()),
             new FileInputStream(Objects.requireNonNull(resource).getFile())
         );
