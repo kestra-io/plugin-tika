@@ -1,6 +1,7 @@
 package io.kestra.plugin.tika;
 
 import com.google.common.collect.ImmutableMap;
+import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.storages.StorageInterface;
@@ -55,11 +56,13 @@ class ParseTest {
         RunContext runContext = runContextFactory.of(ImmutableMap.of());
 
         Parse task = Parse.builder()
-            .from(storage.toString())
-            .extractEmbedded(true)
-            .store(false)
-            .contentType(contentType)
-            .ocrOptions(Parse.OcrOptions.builder().strategy(ocrStrategy).build())
+            .from(Property.of(storage.toString()))
+            .extractEmbedded(Property.of(true))
+            .store(Property.of(false))
+            .contentType(Property.of(contentType))
+            .ocrOptions(Parse.OcrOptions.builder()
+                .strategy(Property.of(ocrStrategy))
+                .build())
             .build();
 
         Parse.Output runOutput = task.run(runContext);

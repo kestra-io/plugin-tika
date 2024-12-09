@@ -4,6 +4,7 @@ import ch.qos.logback.classic.LoggerContext;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.Task;
 import io.kestra.core.runners.RunContext;
@@ -99,22 +100,19 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         title = "The file to parse.",
         description = "Must be an internal storage URI."
     )
-    @PluginProperty(dynamic = true)
-    private String from;
+    private Property<String> from;
 
     @Schema(
         title = "Whether to extract the embedded document."
     )
-    @PluginProperty(dynamic = false)
     @Builder.Default
-    private Boolean extractEmbedded = false;
+    private Property<Boolean> extractEmbedded = Property.of(false);
 
     @Schema(
         title = "The content type of the extracted text."
     )
-    @PluginProperty(dynamic = false)
     @Builder.Default
-    private ContentType contentType = ContentType.XHTML;
+    private Property<ContentType> contentType = Property.of(ContentType.XHTML);
 
     @Schema(
         title = "Custom options for OCR processing.",
@@ -124,15 +122,14 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     @PluginProperty(dynamic = false)
     @Builder.Default
     private OcrOptions ocrOptions = OcrOptions.builder()
-        .strategy(PDFParserConfig.OCR_STRATEGY.NO_OCR)
+        .strategy(Property.of(PDFParserConfig.OCR_STRATEGY.NO_OCR))
         .build();
 
     @Schema(
         title = "Whether to store the data from the query result into an ion serialized data file in Kestra internal storage."
     )
-    @PluginProperty(dynamic = false)
     @Builder.Default
-    protected final boolean store = true;
+    protected final Property<Boolean> store = Property.of(true);
 
     static {
         LoggerFactory.getLogger("org.apache.pdfbox");
@@ -161,15 +158,16 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             config,
             parser.getDetector(),
             logger,
-            this.extractEmbedded,
+            runContext.render(this.extractEmbedded).as(Boolean.class).orElseThrow(),
             runContext
         );
 
         // Handler
         DefaultHandler handler;
-        if (contentType == ContentType.XHTML) {
+        var type = runContext.render(contentType).as(ContentType.class).orElseThrow();
+        if (type == ContentType.XHTML) {
             handler = new ToXMLContentHandler();
-        } else if (contentType == ContentType.XHTML_NO_HEADER) {
+        } else if (type == ContentType.XHTML_NO_HEADER) {
             handler = new BodyContentHandler(new ToXMLContentHandler());
         } else {
             handler = new BodyContentHandler();
@@ -182,27 +180,27 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
 
         // TesseractOCRConfig
         TesseractOCRConfig ocrConfig = new TesseractOCRConfig();
-        ocrConfig.setSkipOcr(ocrOptions.getStrategy() == PDFParserConfig.OCR_STRATEGY.NO_OCR);
+        ocrConfig.setSkipOcr(runContext.render(ocrOptions.getStrategy()).as(PDFParserConfig.OCR_STRATEGY.class).orElseThrow() == PDFParserConfig.OCR_STRATEGY.NO_OCR);
 
         if (ocrOptions.getEnableImagePreprocessing() != null) {
-            ocrConfig.setEnableImagePreprocessing(ocrOptions.getEnableImagePreprocessing());
+            ocrConfig.setEnableImagePreprocessing(runContext.render(ocrOptions.getEnableImagePreprocessing()).as(Boolean.class).orElseThrow());
         }
 
         if (ocrOptions.getLanguage() != null) {
-            ocrConfig.setLanguage(runContext.render(ocrOptions.getLanguage()));
+            ocrConfig.setLanguage(runContext.render(ocrOptions.getLanguage()).as(String.class).orElseThrow());
         }
 
         context.set(TesseractOCRConfig.class, ocrConfig);
 
         // PDFParserConfig
         PDFParserConfig pdfConfig = new PDFParserConfig();
-        pdfConfig.setExtractInlineImages(this.extractEmbedded);
-        pdfConfig.setExtractUniqueInlineImagesOnly(this.extractEmbedded);
-        pdfConfig.setOcrStrategy(ocrOptions.getStrategy());
+        pdfConfig.setExtractInlineImages(runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false));
+        pdfConfig.setExtractUniqueInlineImagesOnly(runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false));
+        pdfConfig.setOcrStrategy(runContext.render(ocrOptions.getStrategy()).as(PDFParserConfig.OCR_STRATEGY.class).orElseThrow());
         context.set(PDFParserConfig.class, pdfConfig);
 
         // Process
-        URI from = new URI(runContext.render(this.from));
+        URI from = new URI(runContext.render(this.from).as(String.class).orElseThrow());
 
         try (InputStream stream = runContext.storage().getFile(from)) {
             parser.parse(stream, handler, metadata, context);
@@ -221,7 +219,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                 .content(content)
                 .build();
 
-            if (this.store) {
+            if (runContext.render(this.store).as(Boolean.class).orElse(true)) {
                 Path tempFile = runContext.workingDir().createTempFile(".ion");
                 try (
                     OutputStream output = new FileOutputStream(tempFile.toFile());
@@ -344,9 +342,8 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             description = "You need to install [Tesseract](https://cwiki.apache.org/confluence/display/TIKA/TikaOCR) " +
                 "to enable OCR processing, along with Tesseract language pack."
         )
-        @PluginProperty(dynamic = false)
         @Builder.Default
-        private PDFParserConfig.OCR_STRATEGY strategy = PDFParserConfig.OCR_STRATEGY.NO_OCR;
+        private Property<PDFParserConfig.OCR_STRATEGY> strategy = Property.of(PDFParserConfig.OCR_STRATEGY.NO_OCR);
 
         @Schema(
             title = "Whether to enable image preprocessing.",
@@ -354,14 +351,12 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                 "before sending the image to Tesseract if the user has included dependencies (listed below) " +
                 "and if the user opts to include these preprocessing steps."
         )
-        @PluginProperty(dynamic = false)
-        private Boolean enableImagePreprocessing;
+        private Property<Boolean> enableImagePreprocessing;
 
         @Schema(
             title = "Language used for OCR."
         )
-        @PluginProperty(dynamic = true)
-        private String language;
+        private Property<String> language;
     }
 
     public enum ContentType {
