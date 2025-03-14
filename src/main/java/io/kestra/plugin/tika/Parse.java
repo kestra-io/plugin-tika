@@ -55,8 +55,8 @@ import java.util.stream.Collectors;
 @Plugin(
     examples = {
         @Example(
-            title = "Extract text from a file.",
             full = true,
+            title = "Extract text from a file.",
             code = """
                 id: tika_parse
                 namespace: company.team
@@ -74,8 +74,8 @@ import java.util.stream.Collectors;
                 """
         ),
         @Example(
-            title = "Extract text from an image using OCR.",
             full = true,
+            title = "Extract text from an image using OCR.",
             code = """
                 id: tika_parse
                 namespace: company.team
@@ -92,6 +92,27 @@ import java.util.stream.Collectors;
                       strategy: OCR_AND_TEXT_EXTRACTION
                     store: true
                 """
+        ),
+        @Example(
+            full = true,
+            title = "Download and extract image metadata using Apache Tika",
+            code = """
+                id: parse-image-metadata-using-apache-tika
+                namespace: company.team
+                
+                tasks:
+                  - id: get_image
+                    type: io.kestra.plugin.core.http.Download
+                    uri: https://kestra.io/blogs/2023-05-31-beginner-guide-kestra.jpg
+                
+                  - id: tika
+                    type: io.kestra.plugin.tika.Parse
+                    from: "{{ outputs.get_image.uri }}"
+                    store: false
+                    contentType: TEXT
+                    ocrOptions:
+                      strategy: OCR_AND_TEXT_EXTRACTION
+            """
         )
     }
 )
