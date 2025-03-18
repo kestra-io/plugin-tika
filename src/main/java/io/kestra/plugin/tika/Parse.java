@@ -99,12 +99,12 @@ import java.util.stream.Collectors;
             code = """
                 id: parse-image-metadata-using-apache-tika
                 namespace: company.team
-                
+
                 tasks:
                   - id: get_image
                     type: io.kestra.plugin.core.http.Download
                     uri: https://kestra.io/blogs/2023-05-31-beginner-guide-kestra.jpg
-                
+
                   - id: tika
                     type: io.kestra.plugin.tika.Parse
                     from: "{{ outputs.get_image.uri }}"
@@ -120,18 +120,18 @@ import java.util.stream.Collectors;
             code = """
                 id: parse-pdf
                 namespace: company.team
-                
+
                 tasks:
                   - id: download_pdf
                     type: io.kestra.plugin.core.http.Download
                     uri: https://huggingface.co/datasets/kestra/datasets/resolve/main/pdf/app_store.pdf
-                
+
                   - id: parse_text
                     type: io.kestra.plugin.tika.Parse
                     from: "{{ outputs.download_pdf.uri }}"
                     contentType: TEXT
                     store: false
-                
+
                   - id: log_extracted_text
                     type: io.kestra.plugin.core.log.Log
                     message: "{{ outputs.parse_text.result.content }}"
@@ -144,6 +144,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         title = "The file to parse.",
         description = "Must be an internal storage URI."
     )
+    @PluginProperty(internalStorageURI = true)
     private Property<String> from;
 
     @Schema(
