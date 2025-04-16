@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Parse a document and extract its content and metadata."
+    title = "Parse a document with Tika and extract its content and metadata."
 )
 @Plugin(
     examples = {
