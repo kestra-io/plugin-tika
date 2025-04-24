@@ -8,6 +8,7 @@ import io.kestra.core.storages.StorageInterface;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.core.junit.annotations.KestraTest;
 import jakarta.inject.Inject;
+import org.apache.tika.exception.WriteLimitReachedException;
 import org.apache.tika.parser.pdf.PDFParserConfig;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -22,6 +23,7 @@ import java.util.stream.Stream;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @KestraTest
 class ParseTest {
@@ -69,5 +71,68 @@ class ParseTest {
 
         assertThat(runOutput.getResult().getContent(), containsString(contains));
         assertThat(runOutput.getResult().getEmbedded().size(), is(embeddedCount));
+    }
+
+    @ParameterizedTest
+    @MethodSource("characterLimitExceedingSource")
+    void shouldThrowWhenCharacterLimitExceeded(String doc, int limit) throws Exception {
+        URL resource = ParseTest.class.getClassLoader().getResource(doc);
+
+        URI storage = storageInterface.put(
+            null,
+            null,
+            new URI("/" + IdUtils.create()),
+            new FileInputStream(Objects.requireNonNull(resource).getFile())
+        );
+
+        RunContext runContext = runContextFactory.of(ImmutableMap.of());
+
+        Parse task = Parse.builder()
+            .from(Property.of(storage.toString()))
+            .extractEmbedded(Property.of(false))
+            .store(Property.of(false))
+            .contentType(Property.of(Parse.ContentType.TEXT))
+            .charactersLimit(Property.of(limit))
+            .build();
+
+        assertThrows(WriteLimitReachedException.class, () -> task.run(runContext));
+    }
+
+    @ParameterizedTest
+    @MethodSource("characterLimitValidSource")
+    void shouldParseTextWhenCharacterLimitIsSufficient(String doc, int limit, String expectedText) throws Exception {
+        URL resource = ParseTest.class.getClassLoader().getResource(doc);
+
+        URI storage = storageInterface.put(
+            null,
+            null,
+            new URI("/" + IdUtils.create()),
+            new FileInputStream(Objects.requireNonNull(resource).getFile())
+        );
+
+        RunContext runContext = runContextFactory.of(ImmutableMap.of());
+
+        Parse task = Parse.builder()
+            .from(Property.of(storage.toString()))
+            .extractEmbedded(Property.of(false))
+            .store(Property.of(false))
+            .contentType(Property.of(Parse.ContentType.TEXT))
+            .charactersLimit(Property.of(limit))
+            .build();
+
+        Parse.Output runOutput = task.run(runContext);
+        assertThat(runOutput.getResult().getContent(), containsString(expectedText));
+    }
+
+    static Stream<Arguments> characterLimitExceedingSource() {
+        return Stream.of(
+            Arguments.of("docs/multi.pdf",10)
+        );
+    }
+
+    static Stream<Arguments> characterLimitValidSource() {
+        return Stream.of(
+            Arguments.of("docs/multi.pdf", -1, "Cras fringilla")
+        );
     }
 }
