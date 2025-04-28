@@ -95,7 +95,7 @@ import java.util.stream.Collectors;
         ),
         @Example(
             full = true,
-            title = "Download and extract image metadata using Apache Tika",
+            title = "Download and extract image metadata using Apache Tika.",
             code = """
                 id: parse-image-metadata-using-apache-tika
                 namespace: company.team
@@ -116,7 +116,7 @@ import java.util.stream.Collectors;
         ),
         @Example(
             full = true,
-            title = "Download a PDF file and extract text from it using Apache Tika",
+            title = "Download a PDF file and extract text from it using Apache Tika.",
             code = """
                 id: parse-pdf
                 namespace: company.team
@@ -141,26 +141,26 @@ import java.util.stream.Collectors;
 )
 public class Parse extends Task implements RunnableTask<Parse.Output> {
     @Schema(
-        title = "The file to parse.",
+        title = "The file to parse",
         description = "Must be an internal storage URI."
     )
     @PluginProperty(internalStorageURI = true)
     private Property<String> from;
 
     @Schema(
-        title = "Whether to extract the embedded document."
+        title = "Set whether to extract the embedded document."
     )
     @Builder.Default
     private Property<Boolean> extractEmbedded = Property.of(false);
 
     @Schema(
-        title = "The content type of the extracted text."
+        title = "The content type of the extracted text"
     )
     @Builder.Default
     private Property<ContentType> contentType = Property.of(ContentType.XHTML);
 
     @Schema(
-        title = "Custom options for OCR processing.",
+        title = "Custom options for OCR processing",
         description = "You need to install [Tesseract](https://cwiki.apache.org/confluence/display/TIKA/TikaOCR) " +
             "to enable OCR processing."
     )
@@ -171,13 +171,13 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         .build();
 
     @Schema(
-        title = "Whether to store the data from the query result into an ion serialized data file in Kestra internal storage."
+        title = "Set whether to store the data from the query result into an Ion serialized data file in Kestra internal storage."
     )
     @Builder.Default
     protected final Property<Boolean> store = Property.of(true);
 
     @PluginProperty
-    @Schema(title = "Maximum number of characters to include in the string, or -1 (default) to disable the write limit")
+    @Schema(title = "Set maximum number of characters to include in the string, or -1 (default) to disable the write limit.")
     private Property<Integer> charactersLimit;
 
     static {
