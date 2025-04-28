@@ -176,6 +176,10 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     @Builder.Default
     protected final Property<Boolean> store = Property.of(true);
 
+    @PluginProperty
+    @Schema(title = "Maximum number of characters to include in the string, or -1 (default) to disable the write limit")
+    private Property<Integer> charactersLimit;
+
     static {
         LoggerFactory.getLogger("org.apache.pdfbox");
         LoggerFactory.getLogger("org.apache.tika");
@@ -210,12 +214,14 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         // Handler
         DefaultHandler handler;
         var type = runContext.render(contentType).as(ContentType.class).orElseThrow();
+        var writeLimit = runContext.render(charactersLimit).as(Integer.class).orElse(-1);
+
         if (type == ContentType.XHTML) {
             handler = new ToXMLContentHandler();
         } else if (type == ContentType.XHTML_NO_HEADER) {
             handler = new BodyContentHandler(new ToXMLContentHandler());
         } else {
-            handler = new BodyContentHandler();
+            handler = new BodyContentHandler(writeLimit);
         }
 
         // ParseContext
