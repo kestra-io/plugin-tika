@@ -5,6 +5,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.storages.StorageInterface;
+import io.kestra.core.tenant.TenantService;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.core.junit.annotations.KestraTest;
 import jakarta.inject.Inject;
@@ -49,7 +50,7 @@ class ParseTest {
         URL resource = ParseTest.class.getClassLoader().getResource(doc);
 
         URI storage = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + IdUtils.create()),
             new FileInputStream(Objects.requireNonNull(resource).getFile())
@@ -79,7 +80,7 @@ class ParseTest {
         URL resource = ParseTest.class.getClassLoader().getResource(doc);
 
         URI storage = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + IdUtils.create()),
             new FileInputStream(Objects.requireNonNull(resource).getFile())
@@ -104,7 +105,7 @@ class ParseTest {
         URL resource = ParseTest.class.getClassLoader().getResource(doc);
 
         URI storage = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + IdUtils.create()),
             new FileInputStream(Objects.requireNonNull(resource).getFile())
