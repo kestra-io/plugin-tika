@@ -112,7 +112,7 @@ import java.util.stream.Collectors;
                     contentType: TEXT
                     ocrOptions:
                       strategy: OCR_AND_TEXT_EXTRACTION
-            """
+                """
         ),
         @Example(
             full = true,
@@ -135,7 +135,7 @@ import java.util.stream.Collectors;
                   - id: log_extracted_text
                     type: io.kestra.plugin.core.log.Log
                     message: "{{ outputs.parse_text.result.content }}"
-            """
+                """
         )
     }
 )
