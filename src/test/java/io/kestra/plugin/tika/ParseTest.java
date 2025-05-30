@@ -59,12 +59,12 @@ class ParseTest {
         RunContext runContext = runContextFactory.of(ImmutableMap.of());
 
         Parse task = Parse.builder()
-            .from(Property.of(storage.toString()))
-            .extractEmbedded(Property.of(true))
-            .store(Property.of(false))
-            .contentType(Property.of(contentType))
+            .from(Property.ofValue(storage.toString()))
+            .extractEmbedded(Property.ofValue(true))
+            .store(Property.ofValue(false))
+            .contentType(Property.ofValue(contentType))
             .ocrOptions(Parse.OcrOptions.builder()
-                .strategy(Property.of(ocrStrategy))
+                .strategy(Property.ofValue(ocrStrategy))
                 .build())
             .build();
 
@@ -89,11 +89,11 @@ class ParseTest {
         RunContext runContext = runContextFactory.of(ImmutableMap.of());
 
         Parse task = Parse.builder()
-            .from(Property.of(storage.toString()))
-            .extractEmbedded(Property.of(false))
-            .store(Property.of(false))
-            .contentType(Property.of(Parse.ContentType.TEXT))
-            .charactersLimit(Property.of(limit))
+            .from(Property.ofValue(storage.toString()))
+            .extractEmbedded(Property.ofValue(false))
+            .store(Property.ofValue(false))
+            .contentType(Property.ofValue(Parse.ContentType.TEXT))
+            .charactersLimit(Property.ofValue(limit))
             .build();
 
         assertThrows(WriteLimitReachedException.class, () -> task.run(runContext));
@@ -114,11 +114,11 @@ class ParseTest {
         RunContext runContext = runContextFactory.of(ImmutableMap.of());
 
         Parse task = Parse.builder()
-            .from(Property.of(storage.toString()))
-            .extractEmbedded(Property.of(false))
-            .store(Property.of(false))
-            .contentType(Property.of(Parse.ContentType.TEXT))
-            .charactersLimit(Property.of(limit))
+            .from(Property.ofValue(storage.toString()))
+            .extractEmbedded(Property.ofValue(false))
+            .store(Property.ofValue(false))
+            .contentType(Property.ofValue(Parse.ContentType.TEXT))
+            .charactersLimit(Property.ofValue(limit))
             .build();
 
         Parse.Output runOutput = task.run(runContext);
