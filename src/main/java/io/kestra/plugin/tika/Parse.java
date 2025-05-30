@@ -151,13 +151,13 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         title = "Set whether to extract the embedded document."
     )
     @Builder.Default
-    private Property<Boolean> extractEmbedded = Property.of(false);
+    private Property<Boolean> extractEmbedded = Property.ofValue(false);
 
     @Schema(
         title = "The content type of the extracted text"
     )
     @Builder.Default
-    private Property<ContentType> contentType = Property.of(ContentType.XHTML);
+    private Property<ContentType> contentType = Property.ofValue(ContentType.XHTML);
 
     @Schema(
         title = "Custom options for OCR processing",
@@ -167,14 +167,14 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     @PluginProperty(dynamic = false)
     @Builder.Default
     private OcrOptions ocrOptions = OcrOptions.builder()
-        .strategy(Property.of(PDFParserConfig.OCR_STRATEGY.NO_OCR))
+        .strategy(Property.ofValue(PDFParserConfig.OCR_STRATEGY.NO_OCR))
         .build();
 
     @Schema(
         title = "Set whether to store the data from the query result into an Ion serialized data file in Kestra internal storage."
     )
     @Builder.Default
-    protected final Property<Boolean> store = Property.of(true);
+    protected final Property<Boolean> store = Property.ofValue(true);
 
     @PluginProperty
     @Schema(title = "Set maximum number of characters to include in the string, or -1 (default) to disable the write limit.")
@@ -394,7 +394,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                 "to enable OCR processing, along with Tesseract language pack."
         )
         @Builder.Default
-        private Property<PDFParserConfig.OCR_STRATEGY> strategy = Property.of(PDFParserConfig.OCR_STRATEGY.NO_OCR);
+        private Property<PDFParserConfig.OCR_STRATEGY> strategy = Property.ofValue(PDFParserConfig.OCR_STRATEGY.NO_OCR);
 
         @Schema(
             title = "Whether to enable image preprocessing.",
