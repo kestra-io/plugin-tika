@@ -1,5 +1,5 @@
 plugins {
-    id "com.vanniktech.maven.publish" version "0.33.0"
+    id "com.vanniktech.maven.publish" version "0.33.4"
     id 'java-library'
     id "idea"
     id 'jacoco'
@@ -50,10 +50,10 @@ dependencies {
     compileOnly 'ch.qos.logback:logback-classic'
 
     // tika plugins
-    api (group: 'org.apache.tika', name: 'tika-core', version: '3.2.0') {
+    api (group: 'org.apache.tika', name: 'tika-core', version: '3.2.1') {
         exclude group: 'org.slf4j'
     }
-    api (group: 'org.apache.tika', name: 'tika-parsers-standard-package', version: '3.2.0') {
+    api (group: 'org.apache.tika', name: 'tika-parsers-standard-package', version: '3.2.1') {
         exclude group: 'org.slf4j'
     }
 }
