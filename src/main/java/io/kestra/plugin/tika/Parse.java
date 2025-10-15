@@ -31,10 +31,7 @@ import org.slf4j.LoggerFactory;
 import org.xml.sax.ContentHandler;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -199,15 +196,31 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     public Parse.Output run(RunContext runContext) throws Exception {
         Logger logger = runContext.logger();
 
+        String fromStr = runContext.render(this.from).as(String.class).orElseThrow();
+        URI from = new URI(fromStr);
         TikaConfig config = new TikaConfig(this.getClass().getClassLoader());
 
-        AutoDetectParser parser = new AutoDetectParser(config);
+        // Detect MIME type to choose parser explicitly (workaround for Tika >= 3.2.2) - to be removed maybe with 3.2.4
+        MediaType mediaType;
+        try (InputStream detectStream = new BufferedInputStream(runContext.storage().getFile(from))) {
+            mediaType = config.getDetector().detect(detectStream, new Metadata());
+        }
+
+        Parser parser;
+        if (mediaType != null
+            && "application".equals(mediaType.getType())
+            && "pdf".equals(mediaType.getSubtype())) {
+            parser = new org.apache.tika.parser.pdf.PDFParser();
+        } else {
+            parser = new AutoDetectParser(config);
+        }
+
         Metadata metadata = new Metadata();
         EmbeddedDocumentExtractor embeddedDocumentExtractor = new EmbeddedDocumentExtractor(
             config,
-            parser.getDetector(),
+            (parser instanceof AutoDetectParser) ? ((AutoDetectParser) parser).getDetector() : config.getDetector(),
             logger,
-            runContext.render(this.extractEmbedded).as(Boolean.class).orElseThrow(),
+            runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false),
             runContext
         );
 
@@ -227,7 +240,6 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         // ParseContext
         ParseContext context = new ParseContext();
         context.set(org.apache.tika.extractor.EmbeddedDocumentExtractor.class, embeddedDocumentExtractor);
-        context.set(Parser.class, parser);
 
         // TesseractOCRConfig
         TesseractOCRConfig ocrConfig = new TesseractOCRConfig();
@@ -251,8 +263,6 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         context.set(PDFParserConfig.class, pdfConfig);
 
         // Process
-        URI from = new URI(runContext.render(this.from).as(String.class).orElseThrow());
-
         try (InputStream stream = runContext.storage().getFile(from)) {
             parser.parse(stream, handler, metadata, context);
 
