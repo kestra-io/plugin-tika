@@ -1,0 +1,8 @@
+group: io.kestra.plugin.tika
+name: "tika"
+title: "Apache Tika"
+description: "This sub-group of plugins contains tasks for using Apache Tika. The Apache Tika toolkit detects and extracts metadata and text from over a thousand different file types (such as PPT, XLS, and PDF)."
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
