@@ -69,7 +69,7 @@ import java.util.stream.Collectors;
                 tasks:
                   - id: parse
                     type: io.kestra.plugin.tika.Parse
-                    from: '{{ inputs.file }}'
+                    from: "{{ inputs.file }}"
                     extractEmbedded: true
                     store: false
 
@@ -92,7 +92,7 @@ import java.util.stream.Collectors;
                 tasks:
                   - id: parse
                     type: io.kestra.plugin.tika.Parse
-                    from: '{{ inputs.file }}'
+                    from: "{{ inputs.file }}"
                     ocrOptions:
                       strategy: OCR_AND_TEXT_EXTRACTION
                     store: true
@@ -120,7 +120,7 @@ import java.util.stream.Collectors;
 
                   - id: log_metadata
                     type: io.kestra.plugin.core.log.Log
-                    message: '{{ outputs.tika.result.metadata }}'
+                    message: "{{ outputs.tika.result.metadata }}"
                 """
         ),
         @Example(
