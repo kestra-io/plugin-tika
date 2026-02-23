@@ -75,7 +75,7 @@ import java.util.stream.Collectors;
 
                   - id: log_embedded
                     type: io.kestra.plugin.core.log.Log
-                    message: '{{ outputs.parse.result.embedded }}'
+                    message: "{{ outputs.parse.result.embedded }}"
                 """
         ),
         @Example(
