@@ -50,15 +50,16 @@ import java.util.stream.Collectors;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Parse a document with Tika and extract its content and metadata."
+    title = "Parse files with Apache Tika",
+    description = "Auto-detects MIME type, extracts text and metadata, and can capture embedded files. Defaults to XHTML content, no OCR, and stores the parsed Ion payload to internal storage unless `store` is false."
 )
 @Plugin(
     examples = {
         @Example(
             full = true,
-            title = "Extract text from a file.",
+            title = "Extract text and embedded files from an upload.",
             code = """
-                id: tika_parse
+                id: tika_parse_file
                 namespace: company.team
 
                 inputs:
@@ -71,13 +72,17 @@ import java.util.stream.Collectors;
                     from: '{{ inputs.file }}'
                     extractEmbedded: true
                     store: false
+
+                  - id: log_embedded
+                    type: io.kestra.plugin.core.log.Log
+                    message: '{{ outputs.parse.result.embedded }}'
                 """
         ),
         @Example(
             full = true,
             title = "Extract text from an image using OCR.",
             code = """
-                id: tika_parse
+                id: tika_parse_image_ocr
                 namespace: company.team
 
                 inputs:
@@ -112,6 +117,10 @@ import java.util.stream.Collectors;
                     contentType: TEXT
                     ocrOptions:
                       strategy: OCR_AND_TEXT_EXTRACTION
+
+                  - id: log_metadata
+                    type: io.kestra.plugin.core.log.Log
+                    message: '{{ outputs.tika.result.metadata }}'
                 """
         ),
         @Example(
@@ -141,28 +150,29 @@ import java.util.stream.Collectors;
 )
 public class Parse extends Task implements RunnableTask<Parse.Output> {
     @Schema(
-        title = "The file to parse",
-        description = "Must be an internal storage URI."
+        title = "Source file to parse",
+        description = "Internal storage URI (e.g. `kestra://...`)."
     )
     @PluginProperty(internalStorageURI = true)
     private Property<String> from;
 
     @Schema(
-        title = "Set whether to extract the embedded document."
+        title = "Extract embedded files",
+        description = "If true, inline/embedded resources are saved to internal storage and returned in `embedded`; default is false."
     )
     @Builder.Default
     private Property<Boolean> extractEmbedded = Property.ofValue(false);
 
     @Schema(
-        title = "The content type of the extracted text"
+        title = "Output content format",
+        description = "Choose `TEXT`, `XHTML` (default), or `XHTML_NO_HEADER`. `charactersLimit` applies only to `TEXT`."
     )
     @Builder.Default
     private Property<ContentType> contentType = Property.ofValue(ContentType.XHTML);
 
     @Schema(
-        title = "Custom options for OCR processing",
-        description = "You need to install [Tesseract](https://cwiki.apache.org/confluence/display/TIKA/TikaOCR) " +
-            "to enable OCR processing."
+        title = "Custom OCR options",
+        description = "Install [Tesseract](https://cwiki.apache.org/confluence/display/TIKA/TikaOCR) to enable OCR. Default strategy is `NO_OCR`."
     )
     @PluginProperty(dynamic = false)
     @Builder.Default
@@ -171,13 +181,17 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         .build();
 
     @Schema(
-        title = "Set whether to store the data from the query result into an Ion serialized data file in Kestra internal storage."
+        title = "Store parsed payload to internal storage",
+        description = "When true (default), writes the parsed Ion file to internal storage and returns its URI; when false, emits the result inline."
     )
     @Builder.Default
     protected final Property<Boolean> store = Property.ofValue(true);
 
     @PluginProperty
-    @Schema(title = "Set maximum number of characters to include in the string, or -1 (default) to disable the write limit.")
+    @Schema(
+        title = "Character write limit",
+        description = "Maximum characters when writing TEXT content; -1 (default) disables the limit."
+    )
     private Property<Integer> charactersLimit;
 
     static {
@@ -389,15 +403,14 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     public static class OcrOptions {
 
         @Schema(
-            title = "OCR strategy to use for OCR processing.",
-            description = "You need to install [Tesseract](https://cwiki.apache.org/confluence/display/TIKA/TikaOCR) " +
-                "to enable OCR processing, along with Tesseract language pack."
+            title = "OCR strategy",
+            description = "Requires Tesseract and language packs. Default is `NO_OCR`; use `OCR_AND_TEXT_EXTRACTION` to merge OCR and text extraction."
         )
         @Builder.Default
         private Property<PDFParserConfig.OCR_STRATEGY> strategy = Property.ofValue(PDFParserConfig.OCR_STRATEGY.NO_OCR);
 
         @Schema(
-            title = "Whether to enable image preprocessing.",
+            title = "Enable image preprocessing",
             description = "Apache Tika will run preprocessing of images (rotation detection and image normalizing with ImageMagick) " +
                 "before sending the image to Tesseract if the user has included dependencies (listed below) " +
                 "and if the user opts to include these preprocessing steps."
@@ -405,7 +418,8 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         private Property<Boolean> enableImagePreprocessing;
 
         @Schema(
-            title = "Language used for OCR."
+            title = "Language used for OCR",
+            description = "Tesseract language code (e.g. `eng`, `fra`)."
         )
         private Property<String> language;
     }
