@@ -1,0 +1,28 @@
+id: all_tika
+namespace: sanitychecks.plugin-tika
+
+tasks:
+  - id: write_text
+    type: io.kestra.plugin.core.storage.Write
+    content: |
+      Kestra Tika sanity check document.
+      This text should be extracted by Apache Tika.
+    extension: .txt
+
+  - id: parse_text
+    type: io.kestra.plugin.tika.Parse
+    from: "{{ outputs.write_text.uri }}"
+    contentType: TEXT
+    store: false
+    extractEmbedded: false
+
+  - id: assert
+    type: io.kestra.plugin.core.execution.Assert
+    conditions:
+      - "{{ outputs.parse_text.result.content is not null }}"
+      - "{{ outputs.parse_text.result.metadata['Content-Type'] contains 'text' }}"
+      - "{{ outputs.parse_text.result.embedded | length == 0 }}"
+
+finally:
+  - id: purge
+    type: io.kestra.plugin.core.storage.PurgeCurrentExecutionFiles
