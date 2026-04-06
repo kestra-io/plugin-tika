@@ -153,7 +153,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         title = "Source file to parse",
         description = "Internal storage URI (e.g. `kestra://...`)."
     )
-    @PluginProperty(internalStorageURI = true)
+    @PluginProperty(internalStorageURI = true, group = "source")
     private Property<String> from;
 
     @Schema(
@@ -161,6 +161,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         description = "If true, inline/embedded resources are saved to internal storage and returned in `embedded`; default is false."
     )
     @Builder.Default
+    @PluginProperty(group = "advanced")
     private Property<Boolean> extractEmbedded = Property.ofValue(false);
 
     @Schema(
@@ -168,13 +169,14 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         description = "Choose `TEXT`, `XHTML` (default), or `XHTML_NO_HEADER`. `charactersLimit` applies only to `TEXT`."
     )
     @Builder.Default
+    @PluginProperty(group = "advanced")
     private Property<ContentType> contentType = Property.ofValue(ContentType.XHTML);
 
     @Schema(
         title = "Custom OCR options",
         description = "Install [Tesseract](https://cwiki.apache.org/confluence/display/TIKA/TikaOCR) to enable OCR. Default strategy is `NO_OCR`."
     )
-    @PluginProperty(dynamic = false)
+    @PluginProperty(dynamic = false, group = "advanced")
     @Builder.Default
     private OcrOptions ocrOptions = OcrOptions.builder()
         .strategy(Property.ofValue(PDFParserConfig.OCR_STRATEGY.NO_OCR))
@@ -185,9 +187,10 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         description = "When true (default), writes the parsed Ion file to internal storage and returns its URI; when false, emits the result inline."
     )
     @Builder.Default
+    @PluginProperty(group = "destination")
     protected final Property<Boolean> store = Property.ofValue(true);
 
-    @PluginProperty
+    @PluginProperty(group = "processing")
     @Schema(
         title = "Character write limit",
         description = "Maximum characters when writing TEXT content; -1 (default) disables the limit."
