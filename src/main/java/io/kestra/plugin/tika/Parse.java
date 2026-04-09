@@ -23,6 +23,7 @@ import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.Parser;
 import org.apache.tika.parser.ocr.TesseractOCRConfig;
+import org.apache.tika.parser.pdf.PDFParser;
 import org.apache.tika.parser.pdf.PDFParserConfig;
 import org.apache.tika.sax.BodyContentHandler;
 import org.apache.tika.sax.ToXMLContentHandler;
@@ -31,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import org.xml.sax.ContentHandler;
 import org.xml.sax.helpers.DefaultHandler;
 
+import java.io.BufferedInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -216,21 +218,46 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     public Parse.Output run(RunContext runContext) throws Exception {
         Logger logger = runContext.logger();
 
+        // Build Tika config once
         TikaConfig config = new TikaConfig(this.getClass().getClassLoader());
 
-        AutoDetectParser parser = new AutoDetectParser(config);
+        // Resolve source URI
+        URI from = new URI(runContext.render(this.from).as(String.class).orElseThrow());
+
+        // Media type detection (separate light pass)
+        // We detect upfront to decide whether to force PDFParser
+        MediaType mediaType;
+        try (InputStream detect = new BufferedInputStream(runContext.storage().getFile(from))) {
+            mediaType = config.getDetector().detect(detect, new Metadata());
+        }
+
+        // Choose parser
+        // IMPORTANT: force PDFParser for PDFs to avoid the empty-output regression
+        // that may occur with AutoDetectParser on some files/environments
+        Parser parser;
+        if (mediaType != null
+            && "application".equals(mediaType.getType())
+            && "pdf".equals(mediaType.getSubtype())) {
+            parser = new PDFParser();
+        } else {
+            parser = new AutoDetectParser(config);
+        }
+
         Metadata metadata = new Metadata();
+
         EmbeddedDocumentExtractor embeddedDocumentExtractor = new EmbeddedDocumentExtractor(
             config,
-            parser.getDetector(),
+            (parser instanceof AutoDetectParser)
+                ? ((AutoDetectParser) parser).getDetector()
+                : config.getDetector(),
             logger,
-            runContext.render(this.extractEmbedded).as(Boolean.class).orElseThrow(),
+            runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false),
             runContext
         );
 
         // Handler
         DefaultHandler handler;
-        var type = runContext.render(contentType).as(ContentType.class).orElseThrow();
+        var type = runContext.render(contentType).as(ContentType.class).orElse(ContentType.XHTML);
         var writeLimit = runContext.render(charactersLimit).as(Integer.class).orElse(-1);
 
         if (type == ContentType.XHTML) {
@@ -241,34 +268,45 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             handler = new BodyContentHandler(writeLimit);
         }
 
-        // ParseContext
+        Parser embeddedParser = (parser instanceof PDFParser)
+            ? new AutoDetectParser(config)
+            : parser;
         ParseContext context = new ParseContext();
         context.set(org.apache.tika.extractor.EmbeddedDocumentExtractor.class, embeddedDocumentExtractor);
-        context.set(Parser.class, parser);
+        context.set(Parser.class, embeddedParser);
 
         // TesseractOCRConfig
         TesseractOCRConfig ocrConfig = new TesseractOCRConfig();
-        ocrConfig.setSkipOcr(runContext.render(ocrOptions.getStrategy()).as(PDFParserConfig.OCR_STRATEGY.class).orElseThrow() == PDFParserConfig.OCR_STRATEGY.NO_OCR);
+        PDFParserConfig.OCR_STRATEGY ocrStrategy = runContext.render(ocrOptions.getStrategy())
+            .as(PDFParserConfig.OCR_STRATEGY.class)
+            .orElse(PDFParserConfig.OCR_STRATEGY.NO_OCR);
+
+        // Skip OCR if strategy is NO_OCR
+        ocrConfig.setSkipOcr(ocrStrategy == PDFParserConfig.OCR_STRATEGY.NO_OCR);
 
         if (ocrOptions.getEnableImagePreprocessing() != null) {
-            ocrConfig.setEnableImagePreprocessing(runContext.render(ocrOptions.getEnableImagePreprocessing()).as(Boolean.class).orElseThrow());
+            ocrConfig.setEnableImagePreprocessing(
+                runContext.render(ocrOptions.getEnableImagePreprocessing()).as(Boolean.class).orElseThrow()
+            );
         }
-
         if (ocrOptions.getLanguage() != null) {
             ocrConfig.setLanguage(runContext.render(ocrOptions.getLanguage()).as(String.class).orElseThrow());
         }
-
         context.set(TesseractOCRConfig.class, ocrConfig);
 
-        // PDFParserConfig
-        PDFParserConfig pdfConfig = new PDFParserConfig();
-        pdfConfig.setExtractInlineImages(runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false));
-        pdfConfig.setExtractUniqueInlineImagesOnly(runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false));
-        pdfConfig.setOcrStrategy(runContext.render(ocrOptions.getStrategy()).as(PDFParserConfig.OCR_STRATEGY.class).orElseThrow());
-        context.set(PDFParserConfig.class, pdfConfig);
+        // Register TesseractOCRParser in the context when OCR is enabled so that
+        // PDF/image pipelines can actually find an OCR-capable parser.
+        if (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR) {
+            context.set(org.apache.tika.parser.ocr.TesseractOCRParser.class,
+                new org.apache.tika.parser.ocr.TesseractOCRParser());
+        }
 
-        // Process
-        URI from = new URI(runContext.render(this.from).as(String.class).orElseThrow());
+        PDFParserConfig pdfConfig = new PDFParserConfig();
+        boolean extract = runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false);
+        pdfConfig.setExtractInlineImages(extract);
+        pdfConfig.setExtractUniqueInlineImagesOnly(extract);
+        pdfConfig.setOcrStrategy(ocrStrategy);
+        context.set(PDFParserConfig.class, pdfConfig);
 
         try (InputStream stream = runContext.storage().getFile(from)) {
             parser.parse(stream, handler, metadata, context);

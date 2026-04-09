@@ -11,6 +11,7 @@ import io.kestra.core.junit.annotations.KestraTest;
 import jakarta.inject.Inject;
 import org.apache.tika.exception.WriteLimitReachedException;
 import org.apache.tika.parser.pdf.PDFParserConfig;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -40,6 +41,7 @@ class ParseTest {
             Arguments.of("docs/image.pdf", Parse.ContentType.XHTML_NO_HEADER, PDFParserConfig.OCR_STRATEGY.NO_OCR, "<img src=\"embedded:image0.jpg\" alt=\"image0.jpg\" /></div>" , 1),
             Arguments.of("docs/multi.pdf", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.NO_OCR, "3 Aliquam erat volutpat" , 1),
             Arguments.of("docs/image.pdf", Parse.ContentType.XHTML_NO_HEADER, PDFParserConfig.OCR_STRATEGY.OCR_AND_TEXT_EXTRACTION, "This is an example" , 1),
+            Arguments.of("docs/simple-text.pdf", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.NO_OCR, "This is supposed to be an output for Tika Plugin", 0),
             Arguments.of("docs/image.png", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.OCR_AND_TEXT_EXTRACTION, "age of foolishness" , 0)
         );
     }
