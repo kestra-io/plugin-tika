@@ -22,9 +22,11 @@ import org.apache.tika.mime.MimeTypeException;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.Parser;
+import org.apache.tika.parser.image.ImageParser;
 import org.apache.tika.parser.ocr.TesseractOCRConfig;
 import org.apache.tika.parser.pdf.PDFParser;
 import org.apache.tika.parser.pdf.PDFParserConfig;
+import org.apache.tika.parser.txt.TXTParser;
 import org.apache.tika.sax.BodyContentHandler;
 import org.apache.tika.sax.ToXMLContentHandler;
 import org.slf4j.Logger;
@@ -232,13 +234,19 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         }
 
         // Choose parser
-        // IMPORTANT: force PDFParser for PDFs to avoid the empty-output regression
-        // that may occur with AutoDetectParser on some files/environments
+        // IMPORTANT: force specific parsers to avoid the empty-output regression
+        // that occurs with AutoDetectParser inside a shadow JAR on some MIME types
         Parser parser;
         if (mediaType != null
             && "application".equals(mediaType.getType())
             && "pdf".equals(mediaType.getSubtype())) {
             parser = new PDFParser();
+        } else if (mediaType != null && "image".equals(mediaType.getType())) {
+            parser = new ImageParser();
+        } else if (mediaType != null
+            && "text".equals(mediaType.getType())
+            && "plain".equals(mediaType.getSubtype())) {
+            parser = new TXTParser();
         } else {
             parser = new AutoDetectParser(config);
         }
@@ -268,7 +276,9 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             handler = new BodyContentHandler(writeLimit);
         }
 
-        Parser embeddedParser = (parser instanceof PDFParser)
+        // When a specific parser was selected for the main document, use AutoDetectParser
+        // for embedded resources so they are handled generically.
+        Parser embeddedParser = !(parser instanceof AutoDetectParser)
             ? new AutoDetectParser(config)
             : parser;
         ParseContext context = new ParseContext();

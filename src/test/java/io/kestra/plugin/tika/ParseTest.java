@@ -42,7 +42,8 @@ class ParseTest {
             Arguments.of("docs/multi.pdf", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.NO_OCR, "3 Aliquam erat volutpat" , 1),
             Arguments.of("docs/image.pdf", Parse.ContentType.XHTML_NO_HEADER, PDFParserConfig.OCR_STRATEGY.OCR_AND_TEXT_EXTRACTION, "This is an example" , 1),
             Arguments.of("docs/simple-text.pdf", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.NO_OCR, "This is supposed to be an output for Tika Plugin", 0),
-            Arguments.of("docs/image.png", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.OCR_AND_TEXT_EXTRACTION, "age of foolishness" , 0)
+            Arguments.of("docs/image.png", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.OCR_AND_TEXT_EXTRACTION, "age of foolishness" , 0),
+            Arguments.of("docs/simple-text.txt", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.NO_OCR, "plain text file for Tika Plugin", 0)
         );
     }
 
