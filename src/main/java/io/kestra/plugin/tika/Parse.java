@@ -233,6 +233,11 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             mediaType = config.getDetector().detect(detect, new Metadata());
         }
 
+        // Resolve OCR strategy early — needed to pick the right image parser below
+        PDFParserConfig.OCR_STRATEGY ocrStrategy = runContext.render(ocrOptions.getStrategy())
+            .as(PDFParserConfig.OCR_STRATEGY.class)
+            .orElse(PDFParserConfig.OCR_STRATEGY.NO_OCR);
+
         // Choose parser
         // IMPORTANT: force specific parsers to avoid the empty-output regression
         // that occurs with AutoDetectParser inside a shadow JAR on some MIME types
@@ -242,7 +247,10 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             && "pdf".equals(mediaType.getSubtype())) {
             parser = new PDFParser();
         } else if (mediaType != null && "image".equals(mediaType.getType())) {
-            parser = new ImageParser();
+            // Use TesseractOCRParser when OCR is requested; ImageParser only extracts metadata
+            parser = (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR)
+                ? new org.apache.tika.parser.ocr.TesseractOCRParser()
+                : new ImageParser();
         } else if (mediaType != null
             && "text".equals(mediaType.getType())
             && "plain".equals(mediaType.getSubtype())) {
@@ -287,9 +295,6 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
 
         // TesseractOCRConfig
         TesseractOCRConfig ocrConfig = new TesseractOCRConfig();
-        PDFParserConfig.OCR_STRATEGY ocrStrategy = runContext.render(ocrOptions.getStrategy())
-            .as(PDFParserConfig.OCR_STRATEGY.class)
-            .orElse(PDFParserConfig.OCR_STRATEGY.NO_OCR);
 
         // Skip OCR if strategy is NO_OCR
         ocrConfig.setSkipOcr(ocrStrategy == PDFParserConfig.OCR_STRATEGY.NO_OCR);
