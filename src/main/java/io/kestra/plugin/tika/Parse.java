@@ -39,6 +39,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import org.apache.tika.io.TikaInputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -247,10 +248,20 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             && "pdf".equals(mediaType.getSubtype())) {
             parser = new PDFParser();
         } else if (mediaType != null && "image".equals(mediaType.getType())) {
-            // Use TesseractOCRParser when OCR is requested; ImageParser only extracts metadata
-            parser = (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR)
-                ? new org.apache.tika.parser.ocr.TesseractOCRParser()
-                : new ImageParser();
+            // Use TesseractOCRParser when OCR is requested; ImageParser only extracts metadata.
+            // In Tika 3.x, TesseractOCRParser uses instance-level setSkipOCR(), not ParseContext
+            // TesseractOCRConfig — so we must configure it explicitly on the instance.
+            if (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR) {
+                org.apache.tika.parser.ocr.TesseractOCRParser tesseractParser =
+                    new org.apache.tika.parser.ocr.TesseractOCRParser();
+                // initialize() must be called before use when not going through TikaConfig;
+                // otherwise hasTesseract() returns false and OCR is silently skipped.
+                tesseractParser.initialize(java.util.Collections.emptyMap());
+                tesseractParser.setSkipOCR(false);
+                parser = tesseractParser;
+            } else {
+                parser = new ImageParser();
+            }
         } else if (mediaType != null
             && "text".equals(mediaType.getType())
             && "plain".equals(mediaType.getSubtype())) {
@@ -260,6 +271,11 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         }
 
         Metadata metadata = new Metadata();
+        // When using a specific parser (not AutoDetectParser), pre-populate Content-Type
+        // so the parser knows the image/text format without needing to re-detect it.
+        if (!(parser instanceof AutoDetectParser) && mediaType != null) {
+            metadata.set("Content-Type", mediaType.toString());
+        }
 
         EmbeddedDocumentExtractor embeddedDocumentExtractor = new EmbeddedDocumentExtractor(
             config,
@@ -311,7 +327,9 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
 
         // Register TesseractOCRParser in the context when OCR is enabled so that
         // PDF/image pipelines can actually find an OCR-capable parser.
-        if (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR) {
+        // Skip when TesseractOCRParser IS the main parser to avoid recursive invocation.
+        if (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR
+            && !(parser instanceof org.apache.tika.parser.ocr.TesseractOCRParser)) {
             context.set(org.apache.tika.parser.ocr.TesseractOCRParser.class,
                 new org.apache.tika.parser.ocr.TesseractOCRParser());
         }
@@ -323,7 +341,14 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         pdfConfig.setOcrStrategy(ocrStrategy);
         context.set(PDFParserConfig.class, pdfConfig);
 
-        try (InputStream stream = runContext.storage().getFile(from)) {
+        // Copy to a temp file so that parsers like TesseractOCRParser can access
+        // the content via a real file path (required for Tesseract's CLI invocation).
+        Path tempContent = runContext.workingDir().createTempFile();
+        try (InputStream raw = runContext.storage().getFile(from)) {
+            Files.copy(raw, tempContent, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        try (TikaInputStream stream = TikaInputStream.get(tempContent)) {
             parser.parse(stream, handler, metadata, context);
 
             String content = handler.toString();
