@@ -113,7 +113,7 @@ import java.util.stream.Collectors;
                 tasks:
                   - id: get_image
                     type: io.kestra.plugin.core.http.Download
-                    uri: https://kestra.io/blogs/2023-05-31-beginner-guide-kestra.jpg
+                    uri: https://kestra.io/cdn-cgi/image/onerror=redirect,width=1080,height=608,fit=cover,format=webp/_astro/main.C_OjFrVt.jpg
 
                   - id: tika
                     type: io.kestra.plugin.tika.Parse
