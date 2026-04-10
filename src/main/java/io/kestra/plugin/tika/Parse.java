@@ -56,7 +56,7 @@ import java.util.stream.Collectors;
 @NoArgsConstructor
 @Schema(
     title = "Parse files with Apache Tika",
-    description = "Auto-detects MIME type, extracts text and metadata, and can capture embedded files. Defaults to XHTML content, no OCR, and stores the parsed Ion payload to internal storage unless `store` is false."
+    description = "Auto-detects MIME type, extracts text and metadata, and can capture embedded files. Defaults to XHTML content, no OCR, and stores the parsed Ion payload to internal storage unless `store` is false. OCR on images requires [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) to be installed on the Kestra host; without it, image parsing falls back to metadata extraction only."
 )
 @Plugin(
     examples = {
@@ -85,7 +85,7 @@ import java.util.stream.Collectors;
         ),
         @Example(
             full = true,
-            title = "Extract text from an image using OCR.",
+            title = "Extract text from an image using OCR (requires Tesseract on the Kestra host).",
             code = """
                 id: tika_parse_image_ocr
                 namespace: company.team
@@ -179,7 +179,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
 
     @Schema(
         title = "Custom OCR options",
-        description = "Install [Tesseract](https://cwiki.apache.org/confluence/display/TIKA/TikaOCR) to enable OCR. Default strategy is `NO_OCR`."
+        description = "OCR options for image parsing. To extract text from images, [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) must be installed on the Kestra host (`apt-get install tesseract-ocr`). Without Tesseract, images are parsed with `ImageParser` and only metadata is returned regardless of the strategy. Default strategy is `NO_OCR`."
     )
     @PluginProperty(dynamic = false, group = "advanced")
     @Builder.Default
