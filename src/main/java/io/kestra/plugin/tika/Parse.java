@@ -234,7 +234,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             mediaType = config.getDetector().detect(detect, new Metadata());
         }
 
-        // Resolve OCR strategy early — needed to pick the right image parser below
+        // Resolve OCR strategy — used to configure PDF parsing and TesseractOCRConfig below
         PDFParserConfig.OCR_STRATEGY ocrStrategy = runContext.render(ocrOptions.getStrategy())
             .as(PDFParserConfig.OCR_STRATEGY.class)
             .orElse(PDFParserConfig.OCR_STRATEGY.NO_OCR);
@@ -252,26 +252,22 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             && "pdf".equals(mediaType.getSubtype())) {
             parser = new PDFParser();
         } else if (mediaType != null && "image".equals(mediaType.getType())) {
-            // Use TesseractOCRParser when OCR is requested; ImageParser only extracts metadata.
-            // In Tika 3.x, TesseractOCRParser uses instance-level setSkipOCR(), not ParseContext
-            // TesseractOCRConfig — so we must configure it explicitly on the instance.
             if (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR) {
+                // OCR requested: use TesseractOCRParser if available, otherwise fall back to ImageParser.
+                // initialize() must be called before hasTesseract() when not going through TikaConfig.
                 org.apache.tika.parser.ocr.TesseractOCRParser tesseractParser =
                     new org.apache.tika.parser.ocr.TesseractOCRParser();
-                // initialize() must be called before use when not going through TikaConfig;
-                // otherwise hasTesseract() returns false and OCR is silently skipped.
                 tesseractParser.initialize(java.util.Collections.emptyMap());
                 if (tesseractParser.hasTesseract()) {
                     tesseractParser.setSkipOCR(false);
                     parser = tesseractParser;
                 } else {
-                    // Tesseract not available: fall back to ImageParser for metadata extraction.
-                    // The metadata-as-content fallback below will provide a useful text representation.
+                    // Tesseract not available: extract image metadata only.
                     parser = new ImageParser();
                     useImageParserFallback = true;
                 }
             } else {
-                // NO_OCR on an image: ImageParser extracts EXIF/format metadata only.
+                // NO_OCR: ImageParser extracts EXIF/format metadata only (no Tesseract dependency).
                 parser = new ImageParser();
                 useImageParserFallback = true;
             }
