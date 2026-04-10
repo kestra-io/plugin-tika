@@ -243,6 +243,10 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         // IMPORTANT: force specific parsers to avoid the empty-output regression
         // that occurs with AutoDetectParser inside a shadow JAR on some MIME types
         Parser parser;
+        // Track whether ImageParser is the effective parser so we can apply the
+        // metadata-as-content fallback after parsing (ImageParser writes nothing to
+        // the ContentHandler — it only populates Metadata with EXIF/image fields).
+        boolean useImageParserFallback = false;
         if (mediaType != null
             && "application".equals(mediaType.getType())
             && "pdf".equals(mediaType.getSubtype())) {
@@ -261,10 +265,15 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                     tesseractParser.setSkipOCR(false);
                     parser = tesseractParser;
                 } else {
+                    // Tesseract not available: fall back to ImageParser for metadata extraction.
+                    // The metadata-as-content fallback below will provide a useful text representation.
                     parser = new ImageParser();
+                    useImageParserFallback = true;
                 }
             } else {
+                // NO_OCR on an image: ImageParser extracts EXIF/format metadata only.
                 parser = new ImageParser();
+                useImageParserFallback = true;
             }
         } else if (mediaType != null
             && "text".equals(mediaType.getType())
@@ -355,7 +364,13 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         try (TikaInputStream stream = TikaInputStream.get(tempContent)) {
             parser.parse(stream, handler, metadata, context);
 
-            String content = handler.toString();
+            String handlerContent = handler.toString();
+            // When ImageParser is used it writes nothing to the ContentHandler — only Metadata is
+            // populated with EXIF/format fields (width, height, color space, …).  Build a plain-text
+            // representation of those fields so that callers always receive something useful.
+            String content = (useImageParserFallback && handlerContent.isBlank())
+                ? buildMetadataText(metadata)
+                : handlerContent;
 
             Parsed parsed = Parsed.builder()
                 .embedded(embeddedDocumentExtractor.extracted)
@@ -386,6 +401,17 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                     .build();
             }
         }
+    }
+
+    /**
+     * Builds a plain-text representation of all Metadata entries, one {@code key: value} pair per line,
+     * sorted alphabetically.  Used as a fallback when ImageParser produced no text content.
+     */
+    private static String buildMetadataText(Metadata metadata) {
+        return Arrays.stream(metadata.names())
+            .sorted()
+            .map(name -> name + ": " + metadata.get(name))
+            .collect(Collectors.joining("\n"));
     }
 
     public static class EmbeddedDocumentExtractor implements org.apache.tika.extractor.EmbeddedDocumentExtractor {
