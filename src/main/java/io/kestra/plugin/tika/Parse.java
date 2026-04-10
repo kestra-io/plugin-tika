@@ -257,8 +257,12 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                 // initialize() must be called before use when not going through TikaConfig;
                 // otherwise hasTesseract() returns false and OCR is silently skipped.
                 tesseractParser.initialize(java.util.Collections.emptyMap());
-                tesseractParser.setSkipOCR(false);
-                parser = tesseractParser;
+                if (tesseractParser.hasTesseract()) {
+                    tesseractParser.setSkipOCR(false);
+                    parser = tesseractParser;
+                } else {
+                    parser = new ImageParser();
+                }
             } else {
                 parser = new ImageParser();
             }
