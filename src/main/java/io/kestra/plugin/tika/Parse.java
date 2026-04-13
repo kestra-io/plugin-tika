@@ -22,8 +22,11 @@ import org.apache.tika.mime.MimeTypeException;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.Parser;
+import org.apache.tika.parser.image.ImageParser;
 import org.apache.tika.parser.ocr.TesseractOCRConfig;
+import org.apache.tika.parser.pdf.PDFParser;
 import org.apache.tika.parser.pdf.PDFParserConfig;
+import org.apache.tika.parser.txt.TXTParser;
 import org.apache.tika.sax.BodyContentHandler;
 import org.apache.tika.sax.ToXMLContentHandler;
 import org.slf4j.Logger;
@@ -31,10 +34,12 @@ import org.slf4j.LoggerFactory;
 import org.xml.sax.ContentHandler;
 import org.xml.sax.helpers.DefaultHandler;
 
+import java.io.BufferedInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import org.apache.tika.io.TikaInputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,7 +56,7 @@ import java.util.stream.Collectors;
 @NoArgsConstructor
 @Schema(
     title = "Parse files with Apache Tika",
-    description = "Auto-detects MIME type, extracts text and metadata, and can capture embedded files. Defaults to XHTML content, no OCR, and stores the parsed Ion payload to internal storage unless `store` is false."
+    description = "Auto-detects MIME type, extracts text and metadata, and can capture embedded files. Defaults to XHTML content, no OCR, and stores the parsed Ion payload to internal storage unless `store` is false. OCR on images requires [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) to be installed on the Kestra host; without it, image parsing falls back to metadata extraction only."
 )
 @Plugin(
     examples = {
@@ -80,7 +85,7 @@ import java.util.stream.Collectors;
         ),
         @Example(
             full = true,
-            title = "Extract text from an image using OCR.",
+            title = "Extract text from an image using OCR (requires Tesseract on the Kestra host).",
             code = """
                 id: tika_parse_image_ocr
                 namespace: company.team
@@ -108,7 +113,7 @@ import java.util.stream.Collectors;
                 tasks:
                   - id: get_image
                     type: io.kestra.plugin.core.http.Download
-                    uri: https://kestra.io/blogs/2023-05-31-beginner-guide-kestra.jpg
+                    uri: https://kestra.io/cdn-cgi/image/onerror=redirect,width=1080,height=608,fit=cover,format=webp/_astro/main.C_OjFrVt.jpg
 
                   - id: tika
                     type: io.kestra.plugin.tika.Parse
@@ -174,7 +179,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
 
     @Schema(
         title = "Custom OCR options",
-        description = "Install [Tesseract](https://cwiki.apache.org/confluence/display/TIKA/TikaOCR) to enable OCR. Default strategy is `NO_OCR`."
+        description = "OCR options for image parsing. To extract text from images, [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) must be installed on the Kestra host (`apt-get install tesseract-ocr`). Without Tesseract, images are parsed with `ImageParser` and only metadata is returned regardless of the strategy. Default strategy is `NO_OCR`."
     )
     @PluginProperty(dynamic = false, group = "advanced")
     @Builder.Default
@@ -216,21 +221,84 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     public Parse.Output run(RunContext runContext) throws Exception {
         Logger logger = runContext.logger();
 
+        // Build Tika config once
         TikaConfig config = new TikaConfig(this.getClass().getClassLoader());
 
-        AutoDetectParser parser = new AutoDetectParser(config);
+        // Resolve source URI
+        URI from = new URI(runContext.render(this.from).as(String.class).orElseThrow());
+
+        // Media type detection (separate light pass)
+        // We detect upfront to decide whether to force PDFParser
+        MediaType mediaType;
+        try (InputStream detect = new BufferedInputStream(runContext.storage().getFile(from))) {
+            mediaType = config.getDetector().detect(detect, new Metadata());
+        }
+
+        // Resolve OCR strategy — used to configure PDF parsing and TesseractOCRConfig below
+        PDFParserConfig.OCR_STRATEGY ocrStrategy = runContext.render(ocrOptions.getStrategy())
+            .as(PDFParserConfig.OCR_STRATEGY.class)
+            .orElse(PDFParserConfig.OCR_STRATEGY.NO_OCR);
+
+        // Choose parser
+        // IMPORTANT: force specific parsers to avoid the empty-output regression
+        // that occurs with AutoDetectParser inside a shadow JAR on some MIME types
+        Parser parser;
+        // Track whether ImageParser is the effective parser so we can apply the
+        // metadata-as-content fallback after parsing (ImageParser writes nothing to
+        // the ContentHandler — it only populates Metadata with EXIF/image fields).
+        boolean useImageParserFallback = false;
+        if (mediaType != null
+            && "application".equals(mediaType.getType())
+            && "pdf".equals(mediaType.getSubtype())) {
+            parser = new PDFParser();
+        } else if (mediaType != null && "image".equals(mediaType.getType())) {
+            if (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR) {
+                // OCR requested: use TesseractOCRParser if available, otherwise fall back to ImageParser.
+                // initialize() must be called before hasTesseract() when not going through TikaConfig.
+                org.apache.tika.parser.ocr.TesseractOCRParser tesseractParser =
+                    new org.apache.tika.parser.ocr.TesseractOCRParser();
+                tesseractParser.initialize(java.util.Collections.emptyMap());
+                if (tesseractParser.hasTesseract()) {
+                    tesseractParser.setSkipOCR(false);
+                    parser = tesseractParser;
+                } else {
+                    // Tesseract not available: extract image metadata only.
+                    parser = new ImageParser();
+                    useImageParserFallback = true;
+                }
+            } else {
+                // NO_OCR: ImageParser extracts EXIF/format metadata only (no Tesseract dependency).
+                parser = new ImageParser();
+                useImageParserFallback = true;
+            }
+        } else if (mediaType != null
+            && "text".equals(mediaType.getType())
+            && "plain".equals(mediaType.getSubtype())) {
+            parser = new TXTParser();
+        } else {
+            parser = new AutoDetectParser(config);
+        }
+
         Metadata metadata = new Metadata();
+        // When using a specific parser (not AutoDetectParser), pre-populate Content-Type
+        // so the parser knows the image/text format without needing to re-detect it.
+        if (!(parser instanceof AutoDetectParser) && mediaType != null) {
+            metadata.set("Content-Type", mediaType.toString());
+        }
+
         EmbeddedDocumentExtractor embeddedDocumentExtractor = new EmbeddedDocumentExtractor(
             config,
-            parser.getDetector(),
+            (parser instanceof AutoDetectParser)
+                ? ((AutoDetectParser) parser).getDetector()
+                : config.getDetector(),
             logger,
-            runContext.render(this.extractEmbedded).as(Boolean.class).orElseThrow(),
+            runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false),
             runContext
         );
 
         // Handler
         DefaultHandler handler;
-        var type = runContext.render(contentType).as(ContentType.class).orElseThrow();
+        var type = runContext.render(contentType).as(ContentType.class).orElse(ContentType.XHTML);
         var writeLimit = runContext.render(charactersLimit).as(Integer.class).orElse(-1);
 
         if (type == ContentType.XHTML) {
@@ -241,39 +309,64 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             handler = new BodyContentHandler(writeLimit);
         }
 
-        // ParseContext
+        // When a specific parser was selected for the main document, use AutoDetectParser
+        // for embedded resources so they are handled generically.
+        Parser embeddedParser = !(parser instanceof AutoDetectParser)
+            ? new AutoDetectParser(config)
+            : parser;
         ParseContext context = new ParseContext();
         context.set(org.apache.tika.extractor.EmbeddedDocumentExtractor.class, embeddedDocumentExtractor);
-        context.set(Parser.class, parser);
+        context.set(Parser.class, embeddedParser);
 
         // TesseractOCRConfig
         TesseractOCRConfig ocrConfig = new TesseractOCRConfig();
-        ocrConfig.setSkipOcr(runContext.render(ocrOptions.getStrategy()).as(PDFParserConfig.OCR_STRATEGY.class).orElseThrow() == PDFParserConfig.OCR_STRATEGY.NO_OCR);
+
+        // Skip OCR if strategy is NO_OCR
+        ocrConfig.setSkipOcr(ocrStrategy == PDFParserConfig.OCR_STRATEGY.NO_OCR);
 
         if (ocrOptions.getEnableImagePreprocessing() != null) {
-            ocrConfig.setEnableImagePreprocessing(runContext.render(ocrOptions.getEnableImagePreprocessing()).as(Boolean.class).orElseThrow());
+            ocrConfig.setEnableImagePreprocessing(
+                runContext.render(ocrOptions.getEnableImagePreprocessing()).as(Boolean.class).orElseThrow()
+            );
         }
-
         if (ocrOptions.getLanguage() != null) {
             ocrConfig.setLanguage(runContext.render(ocrOptions.getLanguage()).as(String.class).orElseThrow());
         }
-
         context.set(TesseractOCRConfig.class, ocrConfig);
 
-        // PDFParserConfig
+        // Register TesseractOCRParser in the context when OCR is enabled so that
+        // PDF/image pipelines can actually find an OCR-capable parser.
+        // Skip when TesseractOCRParser IS the main parser to avoid recursive invocation.
+        if (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR
+            && !(parser instanceof org.apache.tika.parser.ocr.TesseractOCRParser)) {
+            context.set(org.apache.tika.parser.ocr.TesseractOCRParser.class,
+                new org.apache.tika.parser.ocr.TesseractOCRParser());
+        }
+
         PDFParserConfig pdfConfig = new PDFParserConfig();
-        pdfConfig.setExtractInlineImages(runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false));
-        pdfConfig.setExtractUniqueInlineImagesOnly(runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false));
-        pdfConfig.setOcrStrategy(runContext.render(ocrOptions.getStrategy()).as(PDFParserConfig.OCR_STRATEGY.class).orElseThrow());
+        boolean extract = runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false);
+        pdfConfig.setExtractInlineImages(extract);
+        pdfConfig.setExtractUniqueInlineImagesOnly(extract);
+        pdfConfig.setOcrStrategy(ocrStrategy);
         context.set(PDFParserConfig.class, pdfConfig);
 
-        // Process
-        URI from = new URI(runContext.render(this.from).as(String.class).orElseThrow());
+        // Copy to a temp file so that parsers like TesseractOCRParser can access
+        // the content via a real file path (required for Tesseract's CLI invocation).
+        Path tempContent = runContext.workingDir().createTempFile();
+        try (InputStream raw = runContext.storage().getFile(from)) {
+            Files.copy(raw, tempContent, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
 
-        try (InputStream stream = runContext.storage().getFile(from)) {
+        try (TikaInputStream stream = TikaInputStream.get(tempContent)) {
             parser.parse(stream, handler, metadata, context);
 
-            String content = handler.toString();
+            String handlerContent = handler.toString();
+            // When ImageParser is used it writes nothing to the ContentHandler — only Metadata is
+            // populated with EXIF/format fields (width, height, color space, …).  Build a plain-text
+            // representation of those fields so that callers always receive something useful.
+            String content = (useImageParserFallback && handlerContent.isBlank())
+                ? buildMetadataText(metadata)
+                : handlerContent;
 
             Parsed parsed = Parsed.builder()
                 .embedded(embeddedDocumentExtractor.extracted)
@@ -304,6 +397,17 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
                     .build();
             }
         }
+    }
+
+    /**
+     * Builds a plain-text representation of all Metadata entries, one {@code key: value} pair per line,
+     * sorted alphabetically.  Used as a fallback when ImageParser produced no text content.
+     */
+    private static String buildMetadataText(Metadata metadata) {
+        return Arrays.stream(metadata.names())
+            .sorted()
+            .map(name -> name + ": " + metadata.get(name))
+            .collect(Collectors.joining("\n"));
     }
 
     public static class EmbeddedDocumentExtractor implements org.apache.tika.extractor.EmbeddedDocumentExtractor {
