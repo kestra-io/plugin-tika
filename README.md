@@ -37,9 +37,16 @@
 
 # Kestra Tika Plugin
 
-> Plugin to interact with Tika
+## Why
 
-![Kestra orchestrator](https://kestra.io/video.gif)
+- What user problem does this solve? Teams need to extract text and metadata from files using Apache Tika from orchestrated workflows instead of relying on manual console work, ad hoc scripts, or disconnected schedulers.
+- Why would a team adopt this plugin in a workflow? It keeps Apache Tika steps in the same Kestra flow as upstream preparation, approvals, retries, notifications, and downstream systems.
+- What operational/business outcome does it enable? It reduces manual handoffs and fragmented tooling while improving reliability, traceability, and delivery speed for processes that depend on Apache Tika.
+
+## What
+
+- Provides plugin components under `io.kestra.plugin.tika`.
+- Includes classes such as `Parse`.
 
 ## Documentation
 
