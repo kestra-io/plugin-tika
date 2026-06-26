@@ -489,7 +489,10 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
+        @Schema(title = "Parsed result with extracted text and metadata")
         Parsed result;
+
+        @Schema(title = "URI of the extracted content in Kestra's internal storage")
         URI uri;
     }
 
