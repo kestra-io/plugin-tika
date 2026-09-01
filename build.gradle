@@ -69,6 +69,9 @@ dependencies {
  **********************************************************************************************************************/
 test {
     useJUnitPlatform()
+    // ShadowJarPackagingTest asserts on the merged service files inside the actual shaded jar,
+    // since the parser-registration bug it guards against (#140) only manifests in that artifact.
+    dependsOn 'shadowJar'
 }
 
 dependencies {
@@ -174,6 +177,12 @@ jar {
 
 shadowJar {
     archiveClassifier.set(null)
+    // tika-parsers-standard-package ships dozens of module jars that each contribute their own
+    // META-INF/services/org.apache.tika.parser.Parser (and other service) file. Shadow's default
+    // duplicatesStrategy (EXCLUDE) drops every duplicate before mergeServiceFiles() can combine
+    // them, leaving AutoDetectParser with only one registered parser in the shaded jar and causing
+    // it to silently fall back to EmptyParser for any MIME type not hardcoded in Parse.java.
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
     mergeServiceFiles()
 }
 

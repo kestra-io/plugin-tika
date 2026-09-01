@@ -25,6 +25,7 @@ import java.util.stream.Stream;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @KestraTest
@@ -78,6 +79,32 @@ class ParseTest {
 
         assertThat(runOutput.getResult().getContent(), containsString(contains));
         assertThat(runOutput.getResult().getEmbedded().size(), is(embeddedCount));
+    }
+
+    @Test
+    void docxIsParsedWithActualContent() throws Exception {
+        URL resource = ParseTest.class.getClassLoader().getResource("docs/sample.docx");
+
+        URI storage = storageInterface.put(
+            TenantService.MAIN_TENANT,
+            null,
+            new URI("/" + IdUtils.create()),
+            new FileInputStream(Objects.requireNonNull(resource).getFile())
+        );
+
+        RunContext runContext = runContextFactory.of(ImmutableMap.of());
+
+        Parse task = Parse.builder()
+            .from(Property.ofValue(storage.toString()))
+            .store(Property.ofValue(false))
+            .contentType(Property.ofValue(Parse.ContentType.TEXT))
+            .build();
+
+        Parse.Output runOutput = task.run(runContext);
+
+        assertThat(runOutput.getResult().getContent(), containsString("TIKA_MARKER_TEXT_12345"));
+        assertThat((String) runOutput.getResult().getMetadata().get("X-TIKA:Parsed-By"),
+            not(containsString("EmptyParser")));
     }
 
     @ParameterizedTest
