@@ -57,7 +57,7 @@ dependencies {
     api (group: 'org.apache.tika', name: 'tika-core', version: '3.3.2') {
         exclude group: 'org.slf4j'
     }
-    api (group: 'org.apache.tika', name: 'tika-parsers-standard-package', version: '3.3.2') {
+    api (group: 'org.apache.tika', name: 'tika-parsers-standard-package', version: '4.1.0') {
         exclude group: 'org.slf4j'
     }
 }
