@@ -63,6 +63,14 @@ dependencies {
 }
 
 
+configurations.configureEach {
+    resolutionStrategy {
+        // io.kestra:platform strictly pins a vulnerable jsoup (SEC-0167)
+        force 'org.jsoup:jsoup:1.24.1'
+    }
+}
+
+
 /**********************************************************************************************************************\
  * Test
  **********************************************************************************************************************/
