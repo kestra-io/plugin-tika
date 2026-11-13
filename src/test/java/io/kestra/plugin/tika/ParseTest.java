@@ -10,7 +10,7 @@ import io.kestra.core.utils.IdUtils;
 import io.kestra.core.junit.annotations.KestraTest;
 import jakarta.inject.Inject;
 import org.apache.tika.exception.WriteLimitReachedException;
-import org.apache.tika.parser.pdf.PDFParserConfig;
+import org.apache.tika.parser.pdf.OcrConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -38,22 +38,22 @@ class ParseTest {
 
     static Stream<Arguments> noOcrSource() {
         return Stream.of(
-            Arguments.of("docs/full.pdf", Parse.ContentType.XHTML, PDFParserConfig.OCR_STRATEGY.NO_OCR, "<p>subsample" , 46),
-            Arguments.of("docs/image.pdf", Parse.ContentType.XHTML_NO_HEADER, PDFParserConfig.OCR_STRATEGY.NO_OCR, "<img src=\"embedded:image0.jpg\" alt=\"image0.jpg\" /></div>" , 1),
-            Arguments.of("docs/multi.pdf", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.NO_OCR, "3 Aliquam erat volutpat" , 1),
-            Arguments.of("docs/image.pdf", Parse.ContentType.XHTML_NO_HEADER, PDFParserConfig.OCR_STRATEGY.OCR_AND_TEXT_EXTRACTION, "This is an example" , 1),
-            Arguments.of("docs/simple-text.pdf", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.NO_OCR, "This is supposed to be an output for Tika Plugin", 0),
-            Arguments.of("docs/image.png", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.OCR_AND_TEXT_EXTRACTION, "age of foolishness" , 0),
-            Arguments.of("docs/simple-text.txt", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.NO_OCR, "plain text file for Tika Plugin", 0),
+            Arguments.of("docs/full.pdf", Parse.ContentType.XHTML, OcrConfig.Strategy.NO_OCR, "<p>subsample" , 46),
+            Arguments.of("docs/image.pdf", Parse.ContentType.XHTML_NO_HEADER, OcrConfig.Strategy.NO_OCR, "<img src=\"embedded:image-0.jpg\" alt=\"image-0.jpg\" /></div>" , 1),
+            Arguments.of("docs/multi.pdf", Parse.ContentType.TEXT, OcrConfig.Strategy.NO_OCR, "3 Aliquam erat volutpat" , 1),
+            Arguments.of("docs/image.pdf", Parse.ContentType.XHTML_NO_HEADER, OcrConfig.Strategy.OCR_AND_TEXT_EXTRACTION, "This is an example" , 1),
+            Arguments.of("docs/simple-text.pdf", Parse.ContentType.TEXT, OcrConfig.Strategy.NO_OCR, "This is supposed to be an output for Tika Plugin", 0),
+            Arguments.of("docs/image.png", Parse.ContentType.TEXT, OcrConfig.Strategy.OCR_AND_TEXT_EXTRACTION, "age of foolishness" , 0),
+            Arguments.of("docs/simple-text.txt", Parse.ContentType.TEXT, OcrConfig.Strategy.NO_OCR, "plain text file for Tika Plugin", 0),
             // When OCR is not requested for an image, ImageParser extracts metadata only and writes
             // nothing to the ContentHandler.  The fallback builds content from the Metadata fields.
-            Arguments.of("docs/image.png", Parse.ContentType.TEXT, PDFParserConfig.OCR_STRATEGY.NO_OCR, "tiff:ImageWidth", 0)
+            Arguments.of("docs/image.png", Parse.ContentType.TEXT, OcrConfig.Strategy.NO_OCR, "tiff:ImageWidth", 0)
         );
     }
 
     @ParameterizedTest
     @MethodSource("noOcrSource")
-    void run(String doc, Parse.ContentType contentType, PDFParserConfig.OCR_STRATEGY ocrStrategy, String contains, int embeddedCount) throws Exception {
+    void run(String doc, Parse.ContentType contentType, OcrConfig.Strategy ocrStrategy, String contains, int embeddedCount) throws Exception {
         URL resource = ParseTest.class.getClassLoader().getResource(doc);
 
         URI storage = storageInterface.put(
