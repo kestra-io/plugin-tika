@@ -13,17 +13,19 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.apache.commons.io.FilenameUtils;
-import org.apache.tika.config.TikaConfig;
+import org.apache.tika.detect.DefaultDetector;
 import org.apache.tika.detect.Detector;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.metadata.TikaCoreProperties;
 import org.apache.tika.mime.MediaType;
 import org.apache.tika.mime.MimeTypeException;
+import org.apache.tika.mime.MimeTypes;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.Parser;
 import org.apache.tika.parser.image.ImageParser;
 import org.apache.tika.parser.ocr.TesseractOCRConfig;
+import org.apache.tika.parser.pdf.OcrConfig;
 import org.apache.tika.parser.pdf.PDFParser;
 import org.apache.tika.parser.pdf.PDFParserConfig;
 import org.apache.tika.parser.txt.TXTParser;
@@ -184,7 +186,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     @PluginProperty(dynamic = false, group = "advanced")
     @Builder.Default
     private OcrOptions ocrOptions = OcrOptions.builder()
-        .strategy(Property.ofValue(PDFParserConfig.OCR_STRATEGY.NO_OCR))
+        .strategy(Property.ofValue(OcrConfig.Strategy.NO_OCR))
         .build();
 
     @Schema(
@@ -221,8 +223,8 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     public Parse.Output run(RunContext runContext) throws Exception {
         Logger logger = runContext.logger();
 
-        // Build Tika config once
-        TikaConfig config = new TikaConfig(this.getClass().getClassLoader());
+        var detector = new DefaultDetector(this.getClass().getClassLoader());
+        var mimeTypes = MimeTypes.getDefaultMimeTypes(this.getClass().getClassLoader());
 
         // Resolve source URI
         URI from = new URI(runContext.render(this.from).as(String.class).orElseThrow());
@@ -230,14 +232,14 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         // Media type detection (separate light pass)
         // We detect upfront to decide whether to force PDFParser
         MediaType mediaType;
-        try (InputStream detect = new BufferedInputStream(runContext.storage().getFile(from))) {
-            mediaType = config.getDetector().detect(detect, new Metadata());
+        try (var detect = TikaInputStream.get(new BufferedInputStream(runContext.storage().getFile(from)))) {
+            mediaType = detector.detect(detect, new Metadata(), new ParseContext());
         }
 
         // Resolve OCR strategy — used to configure PDF parsing and TesseractOCRConfig below
-        PDFParserConfig.OCR_STRATEGY ocrStrategy = runContext.render(ocrOptions.getStrategy())
-            .as(PDFParserConfig.OCR_STRATEGY.class)
-            .orElse(PDFParserConfig.OCR_STRATEGY.NO_OCR);
+        OcrConfig.Strategy ocrStrategy = runContext.render(ocrOptions.getStrategy())
+            .as(OcrConfig.Strategy.class)
+            .orElse(OcrConfig.Strategy.NO_OCR);
 
         // Choose parser
         // IMPORTANT: force specific parsers to avoid the empty-output regression
@@ -252,14 +254,13 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             && "pdf".equals(mediaType.getSubtype())) {
             parser = new PDFParser();
         } else if (mediaType != null && "image".equals(mediaType.getType())) {
-            if (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR) {
+            if (ocrStrategy != OcrConfig.Strategy.NO_OCR) {
                 // OCR requested: use TesseractOCRParser if available, otherwise fall back to ImageParser.
-                // initialize() must be called before hasTesseract() when not going through TikaConfig.
+                // initialize() must be called before hasTesseract() when not loaded by Tika's service loader.
                 org.apache.tika.parser.ocr.TesseractOCRParser tesseractParser =
                     new org.apache.tika.parser.ocr.TesseractOCRParser();
-                tesseractParser.initialize(java.util.Collections.emptyMap());
+                tesseractParser.initialize();
                 if (tesseractParser.hasTesseract()) {
-                    tesseractParser.setSkipOCR(false);
                     parser = tesseractParser;
                 } else {
                     // Tesseract not available: extract image metadata only.
@@ -276,7 +277,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             && "plain".equals(mediaType.getSubtype())) {
             parser = new TXTParser();
         } else {
-            parser = new AutoDetectParser(config);
+            parser = new AutoDetectParser(detector);
         }
 
         Metadata metadata = new Metadata();
@@ -287,10 +288,10 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         }
 
         EmbeddedDocumentExtractor embeddedDocumentExtractor = new EmbeddedDocumentExtractor(
-            config,
+            mimeTypes,
             (parser instanceof AutoDetectParser)
                 ? ((AutoDetectParser) parser).getDetector()
-                : config.getDetector(),
+                : detector,
             logger,
             runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false),
             runContext
@@ -312,7 +313,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         // When a specific parser was selected for the main document, use AutoDetectParser
         // for embedded resources so they are handled generically.
         Parser embeddedParser = !(parser instanceof AutoDetectParser)
-            ? new AutoDetectParser(config)
+            ? new AutoDetectParser(detector)
             : parser;
         ParseContext context = new ParseContext();
         context.set(org.apache.tika.extractor.EmbeddedDocumentExtractor.class, embeddedDocumentExtractor);
@@ -322,7 +323,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         TesseractOCRConfig ocrConfig = new TesseractOCRConfig();
 
         // Skip OCR if strategy is NO_OCR
-        ocrConfig.setSkipOcr(ocrStrategy == PDFParserConfig.OCR_STRATEGY.NO_OCR);
+        ocrConfig.setSkipOcr(ocrStrategy == OcrConfig.Strategy.NO_OCR);
 
         if (ocrOptions.getEnableImagePreprocessing() != null) {
             ocrConfig.setEnableImagePreprocessing(
@@ -337,7 +338,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         // Register TesseractOCRParser in the context when OCR is enabled so that
         // PDF/image pipelines can actually find an OCR-capable parser.
         // Skip when TesseractOCRParser IS the main parser to avoid recursive invocation.
-        if (ocrStrategy != PDFParserConfig.OCR_STRATEGY.NO_OCR
+        if (ocrStrategy != OcrConfig.Strategy.NO_OCR
             && !(parser instanceof org.apache.tika.parser.ocr.TesseractOCRParser)) {
             context.set(org.apache.tika.parser.ocr.TesseractOCRParser.class,
                 new org.apache.tika.parser.ocr.TesseractOCRParser());
@@ -347,7 +348,9 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         boolean extract = runContext.render(this.extractEmbedded).as(Boolean.class).orElse(false);
         pdfConfig.setExtractInlineImages(extract);
         pdfConfig.setExtractUniqueInlineImagesOnly(extract);
-        pdfConfig.setOcrStrategy(ocrStrategy);
+        var pdfOcrConfig = new OcrConfig();
+        pdfOcrConfig.setStrategy(ocrStrategy);
+        pdfConfig.setOcr(pdfOcrConfig);
         context.set(PDFParserConfig.class, pdfConfig);
 
         // Copy to a temp file so that parsers like TesseractOCRParser can access
@@ -411,7 +414,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
     }
 
     public static class EmbeddedDocumentExtractor implements org.apache.tika.extractor.EmbeddedDocumentExtractor {
-        private final TikaConfig config;
+        private final MimeTypes mimeTypes;
         private final Detector detector;
         private final Logger logger;
         private final Boolean parseEmbedded;
@@ -420,13 +423,13 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         private final Map<String, URI> extracted = new HashMap<>();
 
         public EmbeddedDocumentExtractor(
-            TikaConfig config,
+            MimeTypes mimeTypes,
             Detector detector,
             Logger logger,
             Boolean parseEmbedded,
             RunContext runContext
         ) {
-            this.config = config;
+            this.mimeTypes = mimeTypes;
             this.detector = detector;
             this.logger = logger;
             this.parseEmbedded = parseEmbedded;
@@ -434,12 +437,12 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         }
 
         @Override
-        public boolean shouldParseEmbedded(Metadata metadata) {
+        public boolean shouldParseEmbedded(Metadata metadata, ParseContext context) {
             return this.parseEmbedded;
         }
         @Override
-        public void parseEmbedded(InputStream stream, ContentHandler handler, Metadata metadata, boolean outputHtml) throws IOException {
-            String name = this.fileName(stream, metadata);
+        public void parseEmbedded(TikaInputStream stream, ContentHandler handler, Metadata metadata, ParseContext context, boolean outputHtml) throws IOException {
+            String name = this.fileName(stream, metadata, context);
             String extension = FilenameUtils.getExtension(name);
 
             logger.debug("Extracting file {}", name);
@@ -455,7 +458,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             extracted.put(name, uri);
         }
 
-        private String fileName(InputStream stream, Metadata metadata) throws IOException {
+        private String fileName(TikaInputStream stream, Metadata metadata, ParseContext context) throws IOException {
             String name = metadata.get(TikaCoreProperties.RESOURCE_NAME_KEY);
 
             if (name == null) {
@@ -472,11 +475,11 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             }
 
             //now try to figure out the right extension for the embedded file
-            MediaType contentType = detector.detect(stream, metadata);
+            MediaType contentType = detector.detect(stream, metadata, context);
 
             if (name.indexOf('.') == -1 && contentType != null) {
                 try {
-                    name += config.getMimeRepository().forName(contentType.toString()).getExtension();
+                    name += mimeTypes.forName(contentType.toString()).getExtension();
                 } catch (MimeTypeException e) {
                     logger.debug("Unable to detect MIME type on {}", name);
                 }
@@ -517,7 +520,7 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
             description = "Requires Tesseract and language packs. Default is `NO_OCR`; use `OCR_AND_TEXT_EXTRACTION` to merge OCR and text extraction."
         )
         @Builder.Default
-        private Property<PDFParserConfig.OCR_STRATEGY> strategy = Property.ofValue(PDFParserConfig.OCR_STRATEGY.NO_OCR);
+        private Property<OcrConfig.Strategy> strategy = Property.ofValue(OcrConfig.Strategy.NO_OCR);
 
         @Schema(
             title = "Enable image preprocessing",
