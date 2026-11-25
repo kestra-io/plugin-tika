@@ -19,11 +19,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.FileInputStream;
 import java.net.URI;
 import java.net.URL;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -168,5 +170,89 @@ class ParseTest {
         return Stream.of(
             Arguments.of("docs/multi.pdf", -1, "Cras fringilla")
         );
+    }
+
+    private Map<String, Object> parseMetadata(String doc) throws Exception {
+        return parseMetadata(doc, null);
+    }
+
+    private Map<String, Object> parseMetadata(String doc, Property<Boolean> legacyMetadataKeys) throws Exception {
+        URL resource = ParseTest.class.getClassLoader().getResource(doc);
+
+        URI storage = storageInterface.put(
+            TenantService.MAIN_TENANT,
+            null,
+            new URI("/" + IdUtils.create()),
+            new FileInputStream(Objects.requireNonNull(resource).getFile())
+        );
+
+        Parse.ParseBuilder<?, ?> builder = Parse.builder()
+            .from(Property.ofValue(storage.toString()))
+            .store(Property.ofValue(false))
+            .contentType(Property.ofValue(Parse.ContentType.TEXT));
+        if (legacyMetadataKeys != null) {
+            builder.legacyMetadataKeys(legacyMetadataKeys);
+        }
+
+        return builder.build().run(runContextFactory.of(ImmutableMap.of())).getResult().getMetadata();
+    }
+
+    @Test
+    void pdfMetadataKeepsTika3KeysByDefault() throws Exception {
+        Map<String, Object> metadata = parseMetadata("docs/full.pdf");
+
+        assertThat(metadata, hasKey("pdf:PDFVersion"));
+        assertThat(metadata, hasKey("access_permission:can_print"));
+        assertThat(metadata, not(hasKey("pdf:pdf-version")));
+        assertThat(metadata, not(hasKey("access-permission:can-print")));
+        assertThat(metadata, hasKey("Content-Type"));
+    }
+
+    @Test
+    void imageMetadataKeepsTika3KeysByDefault() throws Exception {
+        Map<String, Object> metadata = parseMetadata("docs/image.png");
+
+        assertThat(metadata, hasKey("width"));
+        assertThat(metadata, hasKey("height"));
+        assertThat(metadata, hasKey("imagereader:NumImages"));
+        assertThat(metadata, not(hasKey("img:width")));
+        assertThat(metadata, not(hasKey("tk:num-images")));
+        assertThat(metadata, hasKey("Content-Type"));
+        assertThat(metadata, hasKey("tiff:ImageWidth"));
+        assertThat(metadata, hasKey("tiff:ImageLength"));
+    }
+
+    @Test
+    void pdfMetadataUsesTika4KeysWhenLegacyDisabled() throws Exception {
+        Map<String, Object> metadata = parseMetadata("docs/full.pdf", Property.ofValue(false));
+
+        assertThat(metadata, hasKey("pdf:pdf-version"));
+        assertThat(metadata, hasKey("access-permission:can-print"));
+        assertThat(metadata, not(hasKey("pdf:PDFVersion")));
+        assertThat(metadata, not(hasKey("access_permission:can_print")));
+        assertThat(metadata, hasKey("Content-Type"));
+    }
+
+    @Test
+    void imageMetadataUsesTika4KeysWhenLegacyDisabled() throws Exception {
+        Map<String, Object> metadata = parseMetadata("docs/image.png", Property.ofValue(false));
+
+        assertThat(metadata, hasKey("img:width"));
+        assertThat(metadata, hasKey("img:height"));
+        assertThat(metadata, hasKey("tk:num-images"));
+        assertThat(metadata, not(hasKey("width")));
+        assertThat(metadata, not(hasKey("height")));
+        assertThat(metadata, not(hasKey("imagereader:NumImages")));
+        assertThat(metadata, hasKey("Content-Type"));
+        assertThat(metadata, hasKey("tiff:ImageWidth"));
+        assertThat(metadata, hasKey("tiff:ImageLength"));
+    }
+
+    @Test
+    void legacyMetadataKeysIsRenderedFromExpression() throws Exception {
+        Map<String, Object> metadata = parseMetadata("docs/full.pdf", Property.ofExpression("{{ false }}"));
+
+        assertThat(metadata, hasKey("pdf:pdf-version"));
+        assertThat(metadata, not(hasKey("pdf:PDFVersion")));
     }
 }
