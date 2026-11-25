@@ -17,6 +17,7 @@ import org.apache.tika.detect.DefaultDetector;
 import org.apache.tika.detect.Detector;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.metadata.TikaCoreProperties;
+import org.apache.tika.metadata.filter.LegacyKeyMigrationFilter;
 import org.apache.tika.mime.MediaType;
 import org.apache.tika.mime.MimeTypeException;
 import org.apache.tika.mime.MimeTypes;
@@ -48,6 +49,7 @@ import java.nio.file.Path;
 import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -127,7 +129,7 @@ import java.util.stream.Collectors;
 
                   - id: log_metadata
                     type: io.kestra.plugin.core.log.Log
-                    message: "{{ outputs.tika.result.metadata }}"
+                    message: "Width: {{ outputs.tika.result.metadata['tiff:ImageWidth'] }}, height: {{ outputs.tika.result.metadata['tiff:ImageLength'] }}, type: {{ outputs.tika.result.metadata['Content-Type'] }}"
                 """
         ),
         @Example(
@@ -203,6 +205,17 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
         description = "Maximum characters when writing TEXT content; -1 (default) disables the limit."
     )
     private Property<Integer> charactersLimit;
+
+    @Schema(
+        title = "Keep Apache Tika 3 metadata key names",
+        description = "Apache Tika 4 renamed most keys of `result.metadata` (for example `pdf:PDFVersion` became `pdf:pdf-version`, `access_permission:can_print` became `access-permission:can-print`, `width` became `img:width` and `imagereader:NumImages` became `tk:num-images`). " +
+            "When true (default), keys are converted back to their Tika 3 names with Tika's `LegacyKeyMigrationFilter` so existing flows keep working; keys without a legacy name (e.g. `Content-Type`, `tiff:*`, Dublin Core) are unchanged. " +
+            "When false, the Tika 4 names are returned as is. " +
+            "The default may change to false in a future release, so new flows should set this to false and read the Tika 4 names."
+    )
+    @Builder.Default
+    @PluginProperty(group = "advanced")
+    private Property<Boolean> legacyMetadataKeys = Property.ofValue(true);
 
     static {
         LoggerFactory.getLogger("org.apache.pdfbox");
@@ -362,6 +375,13 @@ public class Parse extends Task implements RunnableTask<Parse.Output> {
 
         try (TikaInputStream stream = TikaInputStream.get(tempContent)) {
             parser.parse(stream, handler, metadata, context);
+
+            // Tika 4 renamed most metadata keys. Convert them back to the Tika 3 names (V4_TO_V3 is the
+            // filter's default direction) so that flows reading keys by name keep working.
+            // Done before building the content so that the metadata-as-content fallback uses the same keys.
+            if (runContext.render(this.legacyMetadataKeys).as(Boolean.class).orElse(true)) {
+                new LegacyKeyMigrationFilter().filter(List.of(metadata));
+            }
 
             String handlerContent = handler.toString();
             // When ImageParser is used it writes nothing to the ContentHandler — only Metadata is
